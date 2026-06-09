@@ -225,9 +225,15 @@ class Compressor:
             if self.opts.get('compress_sounds') and FFMPEG_AVAILABLE and not self.cancel_flag.is_set():
                 self.set_status("Compression des sons…")
                 self._compress_sounds(files)
-            self.set_progress(85)
+            self.set_progress(80)
 
-            # ── Étape 5 : Écriture ─────────────────────────────────────────
+            # ── Étape 5 : Lua PM ───────────────────────────────────────────
+            if self.opts.get('gen_lua') and not self.cancel_flag.is_set():
+                self.set_status("Génération du fichier Lua…")
+                self._generate_lua(files, Path(self.opts['source']).stem)
+            self.set_progress(90)
+
+            # ── Étape 6 : Écriture ─────────────────────────────────────────
             if not self.cancel_flag.is_set():
                 self.set_status("Écriture de la sortie…")
                 self._write_output(files, src)
@@ -421,6 +427,93 @@ class Compressor:
                         os.unlink(tmp)
                     except OSError:
                         pass
+
+    # ── Génération Lua ────────────────────────────────────────────────────────
+
+    def _generate_lua(self, files: dict, addon_stem: str) -> None:
+        """Génère ou met à jour le fichier Lua d'enregistrement du playermodel."""
+
+        # 1. Trouver tous les .mdl dans models/player/ (hors LOD)
+        pm_models = sorted(
+            p for p in files
+            if p.startswith('models/player/') and p.endswith('.mdl')
+            and not re.search(r'_lod\d+\.mdl$', p)
+        )
+
+        if not pm_models:
+            self.log("  Lua : aucun .mdl dans models/player/ – ignoré")
+            return
+
+        self.log(f"  Lua : {len(pm_models)} modèle(s) trouvé(s)")
+
+        # 2. Trouver les c_hands encore présents dans les fichiers
+        chand_mdls = [
+            p for p in files
+            if re.match(r'models/weapons/c_.*\.mdl', p, re.IGNORECASE)
+        ]
+        include_chands = self.opts.get('lua_chands', True) and bool(chand_mdls)
+
+        # 3. Vérifier s'il existe déjà un fichier Lua avec AddValidModel
+        existing_path: str | None = None
+        for path, data in files.items():
+            if not path.endswith('.lua'):
+                continue
+            try:
+                if b'AddValidModel' in data or b'player_manager' in data:
+                    existing_path = path
+                    break
+            except Exception:
+                pass
+
+        # 4. Construire le contenu Lua
+        safe_stem = re.sub(r'[^a-z0-9]', '_', addon_stem.lower()).strip('_') or 'pm'
+        lines: list[str] = [
+            '-- Généré automatiquement par Compressez PM GMod',
+            f'-- Addon : {addon_stem}',
+            '',
+        ]
+
+        for mdl in pm_models:
+            display = Path(mdl).stem.replace('_', ' ').replace('-', ' ').title()
+            var      = re.sub(r'[^A-Z0-9]', '_', Path(mdl).stem.upper()).strip('_')
+            lines += [
+                f'local MDL_{var} = "{mdl}"',
+                f'player_manager.AddValidModel("{display}", MDL_{var})',
+            ]
+
+            if include_chands:
+                # Chercher le c_hands le plus proche par nom
+                stem = Path(mdl).stem.lower()
+                match = next(
+                    (c for c in chand_mdls
+                     if stem in c or c.replace('models/weapons/c_arms_', '').split('.')[0] in stem),
+                    chand_mdls[0] if chand_mdls else None,
+                )
+                if match:
+                    lines += [
+                        '',
+                        'if CLIENT then',
+                        f'    hook.Add("PlayerSetHandsModel", "chands_{var}", function(ply, ent)',
+                        f'        if ply:GetModel() == MDL_{var} then',
+                        f'            ent:SetModel("{match}")',
+                        f'            ent:SetSkin(ply:GetSkin())',
+                        f'            ent:SetBodyGroups(ply:GetBodygroupsString())',
+                        f'        end',
+                        f'    end)',
+                        'end',
+                    ]
+
+            lines.append('')
+
+        lua_bytes = '\n'.join(lines).encode('utf-8')
+
+        if existing_path:
+            files[existing_path] = lua_bytes
+            self.log(f"  Lua mis à jour : {existing_path}")
+        else:
+            new_path = f'lua/autorun/sh_{safe_stem}_pm.lua'
+            files[new_path] = lua_bytes
+            self.log(f"  Lua créé : {new_path}")
 
     # ── Écriture ─────────────────────────────────────────────────────────────
 
@@ -701,8 +794,30 @@ class App:
                   orient='h', length=100).pack(side='left', padx=4)
         ttk.Label(zr, text="Max").pack(side='left')
 
+        # ── Séparateur ────────────────────────────────────────────────────
+        ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(10, 4))
+
+        # Génération Lua
+        self.gen_lua = tk.BooleanVar(value=True)
+        ttk.Checkbutton(right, text="Générer le fichier Lua PM",
+                        variable=self.gen_lua,
+                        command=self._toggle_lua).pack(anchor='w')
+        ttk.Label(right, text="  Crée/met à jour lua/autorun/sh_*_pm.lua",
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 3))
+
+        self.lua_sub = ttk.Frame(right)
+        self.lua_sub.pack(anchor='w', padx=(16, 0))
+
+        self.lua_chands = tk.BooleanVar(value=True)
+        ttk.Checkbutton(self.lua_sub, text="Inclure les C-Hands dans le Lua",
+                        variable=self.lua_chands).pack(anchor='w')
+        ttk.Label(self.lua_sub,
+                  text="  Ajoute le hook PlayerSetHandsModel si\n  les c_arms sont présents",
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w')
+
         self._toggle_tex()
         self._toggle_snd()
+        self._toggle_lua()
 
     def _build_progress_section(self, parent):
         frm = ttk.LabelFrame(parent, text=" Progression ", padding=8)
@@ -753,6 +868,9 @@ class App:
 
     def _toggle_snd(self):
         self._set_sub_state(self.snd_sub, self.comp_snd.get())
+
+    def _toggle_lua(self):
+        self._set_sub_state(self.lua_sub, self.gen_lua.get())
 
     @staticmethod
     def _set_sub_state(frame, enabled: bool):
@@ -828,6 +946,8 @@ class App:
             'compress_sounds':   self.comp_snd.get() and FFMPEG_AVAILABLE,
             'sound_quality':     self.snd_qual.get(),
             'zip_level':         int(self.zip_lvl.get()),
+            'gen_lua':           self.gen_lua.get(),
+            'lua_chands':        self.lua_chands.get(),
         }
 
         self.run_btn.configure(state='disabled')
@@ -928,6 +1048,12 @@ Exemples :
     parser.add_argument('--zip-level', type=int, default=6,
                         choices=range(1, 10), metavar='1-9',
                         help="Niveau de compression ZIP (défaut : 6)")
+    parser.add_argument('--gen-lua', action='store_true', default=True,
+                        help="Générer/mettre à jour le fichier Lua PM (défaut : activé)")
+    parser.add_argument('--no-lua', action='store_true',
+                        help="Ne pas générer de fichier Lua")
+    parser.add_argument('--no-lua-chands', action='store_true',
+                        help="Ne pas inclure les C-Hands dans le Lua généré")
 
     args = parser.parse_args()
 
@@ -944,6 +1070,8 @@ Exemples :
         'compress_sounds':   args.compress_sounds,
         'sound_quality':     args.sound_quality,
         'zip_level':         args.zip_level,
+        'gen_lua':           not args.no_lua,
+        'lua_chands':        not args.no_lua_chands,
     }
 
     print(f"Compressez PM GMod v{VERSION} – mode CLI\n")
