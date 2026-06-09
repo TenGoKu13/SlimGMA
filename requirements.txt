@@ -1,0 +1,5 @@
+# Requis pour optimiser les textures .png / .jpg / .tga
+Pillow>=10.0.0
+
+# Optionnel : support natif des fichiers .vtf
+# vtflib>=0.1.0
