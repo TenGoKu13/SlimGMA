@@ -15,7 +15,7 @@ if errorlevel 1 (
 )
 
 echo [1/3] Installation des dépendances...
-pip install pyinstaller pillow --quiet
+python -m pip install pyinstaller pillow --quiet
 if errorlevel 1 (
     echo ERREUR lors de l'installation des dépendances.
     pause
@@ -23,7 +23,7 @@ if errorlevel 1 (
 )
 
 echo [2/3] Construction de l'executable...
-pyinstaller ^
+python -m PyInstaller ^
     --onefile ^
     --windowed ^
     --name "Compressez-PM-GMod" ^
