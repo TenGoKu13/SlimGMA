@@ -1,0 +1,28 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: python -m pip install pyinstaller pillow
+
+      - name: Construire le .exe
+        run: python -m PyInstaller --onefile --windowed --name "Compressez-PM-GMod" compressez_pm.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compressez-PM-GMod-EXE
+          path: dist/Compressez-PM-GMod.exe
