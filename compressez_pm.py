@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+# Requires Python 3.9+ (Windows 64-bit compatible)
 """
 Compressez PM GMod
 Outil de compression d'addons Playermodel pour Garry's Mod
 """
+from __future__ import annotations
 
 import os
 import sys
@@ -458,8 +460,8 @@ class Compressor:
                         gma.description = info.get('description', '')
                     except Exception:
                         pass
-            gma.files = {k.replace('/', '\\') if '/' in k else k: v
-                         for k, v in out_files.items()}
+            # Le format GMA utilise des forward slashes même sur Windows
+            gma.files = out_files
             out_path = output if output.suffix == '.gma' else output.with_suffix('.gma')
             out_path.parent.mkdir(parents=True, exist_ok=True)
             gma.save(str(out_path))
