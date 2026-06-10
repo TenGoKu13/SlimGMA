@@ -222,12 +222,15 @@ class GMAFile:
 class Compressor:
     """Logique de compression principale"""
 
-    def __init__(self, opts: dict, log_fn, progress_fn, status_fn):
+    def __init__(self, opts: dict, log_fn, progress_fn, status_fn, current_file_fn=None):
         self.opts        = opts
         self.log         = log_fn
         self.set_progress = progress_fn
         self.set_status  = status_fn
+        self.set_current_file = current_file_fn or (lambda *_: None)
         self.cancel_flag = threading.Event()
+        self.final_size: int | None = None
+        self.reduction: float | None = None
 
     def cancel(self):
         self.cancel_flag.set()
@@ -240,67 +243,89 @@ class Compressor:
             files = self._load_files(src)
 
             if not files:
-                self.log("ERREUR : Aucun fichier trouvé dans la source.")
+                self.log("✗ ERREUR : Aucun fichier trouvé dans la source.")
                 return
 
-            self.log(f"Fichiers chargés : {len(files)}")
+            self.log(f"▶ {len(files)} fichier(s) chargé(s)")
             original_size = sum(len(v) for v in files.values())
-            self.log(f"Taille originale : {self._fmt_size(original_size)}")
+            self.log(f"  Taille originale : {self._fmt_size(original_size)}")
             self.log("")
 
             # ── Étape 1 : C-Hands ──────────────────────────────────────────
+            self.log("▶ Étape 1/6 — C-Hands")
             if self.opts.get('remove_chands') and not self.cancel_flag.is_set():
                 self.set_status("Suppression des C-Hands…")
                 removed = self._remove_chands(files)
-                self.log(f"C-Hands supprimés : {removed} fichier(s)")
+                self.log(f"  ✓ {removed} fichier(s) supprimé(s)")
+            else:
+                self.log("  (désactivé)")
             self.set_progress(20)
 
             # ── Étape 2 : Fichiers inutiles ────────────────────────────────
+            self.log("▶ Étape 2/6 — Fichiers inutiles")
             if self.opts.get('remove_unused') and not self.cancel_flag.is_set():
                 self.set_status("Suppression des fichiers inutiles…")
                 removed = self._remove_unused(files)
-                self.log(f"Fichiers inutiles supprimés : {removed}")
+                self.log(f"  ✓ {removed} fichier(s) supprimé(s)")
+            else:
+                self.log("  (désactivé)")
             self.set_progress(35)
 
             # ── Étape 3 : Textures ─────────────────────────────────────────
+            self.log("▶ Étape 3/6 — Textures")
             if self.opts.get('compress_textures') and not self.cancel_flag.is_set():
                 self.set_status("Optimisation des textures…")
                 self._optimize_textures(files)
+            else:
+                self.log("  (désactivé)")
             self.set_progress(65)
 
             # ── Étape 4 : Sons ─────────────────────────────────────────────
-            if self.opts.get('compress_sounds') and FFMPEG_AVAILABLE and not self.cancel_flag.is_set():
-                self.set_status("Compression des sons…")
-                self._compress_sounds(files)
+            self.log("▶ Étape 4/6 — Sons")
+            if self.opts.get('compress_sounds') and not self.cancel_flag.is_set():
+                if FFMPEG_AVAILABLE:
+                    self.set_status("Compression des sons…")
+                    self._compress_sounds(files)
+                else:
+                    self.log("  ⚠ ffmpeg introuvable dans le PATH, étape ignorée")
+            else:
+                self.log("  (désactivé)")
             self.set_progress(80)
 
             # ── Étape 5 : Lua PM ───────────────────────────────────────────
+            self.log("▶ Étape 5/6 — Fichier Lua PM")
             if self.opts.get('gen_lua') and not self.cancel_flag.is_set():
                 self.set_status("Génération du fichier Lua…")
                 self._generate_lua(files, Path(self.opts['source']).stem)
+            else:
+                self.log("  (désactivé)")
             self.set_progress(90)
 
             # ── Étape 6 : Écriture ─────────────────────────────────────────
+            self.log("▶ Étape 6/6 — Écriture de la sortie")
             if not self.cancel_flag.is_set():
                 self.set_status("Écriture de la sortie…")
                 self._write_output(files, src)
             self.set_progress(100)
+            self.set_current_file("")
 
             if not self.cancel_flag.is_set():
                 final_size = sum(len(v) for v in files.values())
                 reduction  = (1 - final_size / original_size) * 100 if original_size > 0 else 0
+                self.final_size = final_size
+                self.reduction  = reduction
                 self.log("")
-                self.log(f"Taille finale  : {self._fmt_size(final_size)}")
-                self.log(f"Réduction      : {reduction:.1f}%")
-                self.log("Compression terminée avec succès !")
+                self.log(f"✓ Taille finale  : {self._fmt_size(final_size)}")
+                self.log(f"✓ Réduction      : {reduction:.1f}%")
+                self.log("✓ Compression terminée avec succès !")
                 self.set_status("Terminé !")
             else:
-                self.log("\nCompression annulée.")
+                self.log("\n⚠ Compression annulée.")
                 self.set_status("Annulé")
 
         except Exception as e:
             import traceback
-            self.log(f"\nERREUR : {e}")
+            self.log(f"\n✗ ERREUR : {e}")
             self.log(traceback.format_exc())
             self.set_status("Erreur !")
 
@@ -382,6 +407,7 @@ class Compressor:
             if self.cancel_flag.is_set():
                 break
 
+            self.set_current_file(path)
             ext = Path(path).suffix.lower()
             new_data = None
 
@@ -560,6 +586,7 @@ class Compressor:
         for path, data in snd_files.items():
             if self.cancel_flag.is_set():
                 break
+            self.set_current_file(path)
             ext = Path(path).suffix.lower()
             # Toujours convertir en .mp3 avec le bitrate choisi
             out_ext = '.mp3'
@@ -768,13 +795,38 @@ class App:
     RED     = '#f38ba8'
     YELLOW  = '#f9e2af'
 
+    # Profils rapides : ajustent automatiquement les options ci-dessous
+    PRESETS: dict[str, dict | None] = {
+        "Personnalisé": None,
+        "Équilibré (recommandé)": {
+            'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
+            'max_res': '1024', 'quality': 85, 'compress_sounds': False,
+            'sound_quality': '128k', 'zip_level': 6,
+        },
+        "Qualité maximale": {
+            'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
+            'max_res': 'Aucune limite', 'quality': 100, 'compress_sounds': False,
+            'sound_quality': '320k', 'zip_level': 4,
+        },
+        "Taille minimale": {
+            'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
+            'max_res': '512', 'quality': 60, 'compress_sounds': True,
+            'sound_quality': '96k', 'zip_level': 9,
+        },
+        "Partage rapide (Discord…)": {
+            'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
+            'max_res': '256', 'quality': 50, 'compress_sounds': True,
+            'sound_quality': '64k', 'zip_level': 9,
+        },
+    }
+
     def __init__(self):
         self.root = tk.Tk()
         self.root.title(f"Compressez PM GMod  v{VERSION}")
-        self.root.geometry("740x700")
+        self.root.geometry("820x780")
         self.root.configure(bg=self.BG)
         self.root.resizable(True, True)
-        self.root.minsize(620, 580)
+        self.root.minsize(700, 640)
 
         self._compressor: Compressor | None = None
         self._thread: threading.Thread | None = None
@@ -809,12 +861,17 @@ class App:
                     bordercolor=self.SURFACE)
         s.configure('Accent.TButton',  background=self.ACCENT, foreground=self.BG,
                     font=('Segoe UI', 9, 'bold'), padding=(14, 5))
+        s.configure('TNotebook',       background=self.BG, bordercolor=self.SURFACE)
+        s.configure('TNotebook.Tab',   background=self.SURFACE, foreground=self.FG,
+                    padding=(12, 5), font=('Segoe UI', 9))
 
         s.map('Accent.TButton',  background=[('active', '#74c7ec')])
         s.map('TButton',         background=[('active', '#45475a')])
         s.map('TCheckbutton',    background=[('active', self.BG)])
         s.map('TRadiobutton',    background=[('active', self.BG)])
         s.map('TCombobox',       fieldbackground=[('readonly', self.SURFACE)])
+        s.map('TNotebook.Tab',   background=[('selected', self.ACCENT)],
+                                  foreground=[('selected', self.BG)])
 
     # ── Construction UI ───────────────────────────────────────────────────────
 
@@ -874,16 +931,38 @@ class App:
         ttk.Radiobutton(types_row, text=".gma",    variable=self.out_fmt, value='gma').pack(side='left', padx=(0, 8))
         ttk.Radiobutton(types_row, text=".zip",    variable=self.out_fmt, value='zip').pack(side='left')
 
+        # Statistiques de la source (mises à jour après sélection)
+        self.stats_var = tk.StringVar(value="")
+        ttk.Label(frm, textvariable=self.stats_var,
+                  foreground=self.ACCENT, font=('Segoe UI', 8, 'bold')).pack(anchor='w', pady=(4, 0))
+
     def _build_options_section(self, parent):
-        frm = ttk.LabelFrame(parent, text=" Options ", padding=8)
-        frm.pack(fill='x', pady=(0, 6))
+        # ── Profil rapide ───────────────────────────────────────────────────
+        profile_frm = ttk.Frame(parent)
+        profile_frm.pack(fill='x', pady=(0, 6))
+        ttk.Label(profile_frm, text="Profil rapide :").pack(side='left')
+        self.profile_var = tk.StringVar(value=next(iter(self.PRESETS)))
+        profile_combo = ttk.Combobox(profile_frm, textvariable=self.profile_var, width=26,
+                                      values=list(self.PRESETS.keys()), state='readonly')
+        profile_combo.pack(side='left', padx=4)
+        profile_combo.bind('<<ComboboxSelected>>', self._apply_profile)
+        ttk.Label(profile_frm, text="  Ajuste automatiquement les réglages ci-dessous",
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(side='left')
 
-        left  = ttk.Frame(frm)
+        # ── Onglets Général / Avancé ────────────────────────────────────────
+        notebook = ttk.Notebook(parent)
+        notebook.pack(fill='x', pady=(0, 6))
+
+        general_tab  = ttk.Frame(notebook, padding=8)
+        advanced_tab = ttk.Frame(notebook, padding=8)
+        notebook.add(general_tab,  text=" Général ")
+        notebook.add(advanced_tab, text=" Avancé ")
+
+        # ════════════════════ Onglet Général ════════════════════
+        left  = ttk.Frame(general_tab)
         left.pack(side='left', fill='both', expand=True)
-        right = ttk.Frame(frm)
+        right = ttk.Frame(general_tab)
         right.pack(side='left', fill='both', expand=True, padx=(12, 0))
-
-        # ── Colonne gauche ────────────────────────────────────────────────
 
         # C-Hands
         self.rem_chands = tk.BooleanVar(value=True)
@@ -901,11 +980,11 @@ class App:
 
         # Textures
         self.comp_tex = tk.BooleanVar(value=True)
-        ttk.Checkbutton(left, text="Optimiser les textures",
+        ttk.Checkbutton(right, text="Optimiser les textures",
                         variable=self.comp_tex,
                         command=self._toggle_tex).pack(anchor='w')
 
-        self.tex_sub = ttk.Frame(left)
+        self.tex_sub = ttk.Frame(right)
         self.tex_sub.pack(anchor='w', padx=(16, 0), pady=(2, 0))
 
         r1 = ttk.Frame(self.tex_sub)
@@ -932,45 +1011,9 @@ class App:
                       text="⚠  pip install Pillow  pour les images non-VTF",
                       foreground=self.YELLOW, font=('Segoe UI', 8)).pack(anchor='w', pady=(2, 0))
 
-        # ── Colonne droite ────────────────────────────────────────────────
-
-        # Sons
-        self.comp_snd = tk.BooleanVar(value=False)
-        ttk.Checkbutton(right, text="Compresser les sons",
-                        variable=self.comp_snd,
-                        command=self._toggle_snd).pack(anchor='w')
-        snd_status = ("✓ ffmpeg détecté" if FFMPEG_AVAILABLE
-                      else "⚠  ffmpeg introuvable dans le PATH")
-        snd_color = self.GREEN if FFMPEG_AVAILABLE else self.YELLOW
-        ttk.Label(right, text=f"  {snd_status}",
-                  foreground=snd_color, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        self.snd_sub = ttk.Frame(right)
-        self.snd_sub.pack(anchor='w', padx=(16, 0))
-
-        rs = ttk.Frame(self.snd_sub)
-        rs.pack(anchor='w')
-        ttk.Label(rs, text="Bitrate :").pack(side='left')
-        self.snd_qual = tk.StringVar(value='128k')
-        ttk.Combobox(rs, textvariable=self.snd_qual, width=8,
-                     values=['64k', '96k', '128k', '192k', '320k'],
-                     state='readonly').pack(side='left', padx=4)
-
-        # Niveau ZIP
-        ttk.Label(right, text="Niveau de compression ZIP :",
-                  foreground=self.FG).pack(anchor='w', pady=(12, 2))
-        zr = ttk.Frame(right)
-        zr.pack(anchor='w')
-        ttk.Label(zr, text="Rapide").pack(side='left')
-        self.zip_lvl = tk.IntVar(value=6)
-        ttk.Scale(zr, from_=1, to=9, variable=self.zip_lvl,
-                  orient='h', length=100).pack(side='left', padx=4)
-        ttk.Label(zr, text="Max").pack(side='left')
-
-        # ── Séparateur ────────────────────────────────────────────────────
+        # Génération Lua
         ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(10, 4))
 
-        # Génération Lua
         self.gen_lua = tk.BooleanVar(value=True)
         ttk.Checkbutton(right, text="Générer le fichier Lua PM",
                         variable=self.gen_lua,
@@ -988,6 +1031,63 @@ class App:
                   text="  Ajoute le hook PlayerSetHandsModel si\n  les c_arms sont présents",
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w')
 
+        # ════════════════════ Onglet Avancé ════════════════════
+        aleft  = ttk.Frame(advanced_tab)
+        aleft.pack(side='left', fill='both', expand=True)
+        aright = ttk.Frame(advanced_tab)
+        aright.pack(side='left', fill='both', expand=True, padx=(12, 0))
+
+        # Sons
+        self.comp_snd = tk.BooleanVar(value=False)
+        ttk.Checkbutton(aleft, text="Compresser les sons",
+                        variable=self.comp_snd,
+                        command=self._toggle_snd).pack(anchor='w')
+        snd_status = ("✓ ffmpeg détecté" if FFMPEG_AVAILABLE
+                      else "⚠  ffmpeg introuvable dans le PATH")
+        snd_color = self.GREEN if FFMPEG_AVAILABLE else self.YELLOW
+        ttk.Label(aleft, text=f"  {snd_status}",
+                  foreground=snd_color, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        self.snd_sub = ttk.Frame(aleft)
+        self.snd_sub.pack(anchor='w', padx=(16, 0))
+
+        rs = ttk.Frame(self.snd_sub)
+        rs.pack(anchor='w')
+        ttk.Label(rs, text="Bitrate :").pack(side='left')
+        self.snd_qual = tk.StringVar(value='128k')
+        ttk.Combobox(rs, textvariable=self.snd_qual, width=8,
+                     values=['64k', '96k', '128k', '192k', '320k'],
+                     state='readonly').pack(side='left', padx=4)
+
+        # Niveau ZIP
+        ttk.Label(aleft, text="Niveau de compression ZIP :",
+                  foreground=self.FG).pack(anchor='w', pady=(12, 2))
+        zr = ttk.Frame(aleft)
+        zr.pack(anchor='w')
+        ttk.Label(zr, text="Rapide").pack(side='left')
+        self.zip_lvl = tk.IntVar(value=6)
+        ttk.Scale(zr, from_=1, to=9, variable=self.zip_lvl,
+                  orient='h', length=100).pack(side='left', padx=4)
+        ttk.Label(zr, text="Max").pack(side='left')
+
+        # Infos dépendances (côté droit de l'onglet avancé)
+        ttk.Label(aright, text="Bibliothèques détectées :",
+                  font=('Segoe UI', 9, 'bold')).pack(anchor='w')
+        for label, ok in (
+            ("Pillow (.png/.jpg/.tga)", PIL_AVAILABLE),
+            ("vtflib (.vtf natif)",     VTFLIB_AVAILABLE),
+            ("ffmpeg (sons)",           FFMPEG_AVAILABLE),
+        ):
+            mark  = "✓" if ok else "✗"
+            color = self.GREEN if ok else self.SUB
+            ttk.Label(aright, text=f"  {mark}  {label}",
+                      foreground=color, font=('Segoe UI', 8)).pack(anchor='w')
+        ttk.Label(aright,
+                  text="\nSans vtflib, les .vtf sont réduits par\n"
+                       "troncature de mipmaps (résolution\n"
+                       "max respectée, sans dépendance).",
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(6, 0))
+
         self._toggle_tex()
         self._toggle_snd()
         self._toggle_lua()
@@ -999,9 +1099,16 @@ class App:
         self.prog_var = tk.DoubleVar(value=0)
         ttk.Progressbar(frm, variable=self.prog_var, maximum=100).pack(fill='x')
 
+        status_row = ttk.Frame(frm)
+        status_row.pack(fill='x', pady=(3, 0))
+
         self.status_var = tk.StringVar(value="Prêt")
-        ttk.Label(frm, textvariable=self.status_var,
-                  foreground=self.SUB).pack(anchor='w', pady=(3, 0))
+        ttk.Label(status_row, textvariable=self.status_var,
+                  foreground=self.SUB).pack(side='left')
+
+        self.file_var = tk.StringVar(value="")
+        ttk.Label(status_row, textvariable=self.file_var,
+                  foreground=self.SUB, font=('Consolas', 8)).pack(side='right')
 
     def _build_log_section(self, parent):
         frm = ttk.LabelFrame(parent, text=" Journal ", padding=8)
@@ -1019,12 +1126,22 @@ class App:
         )
         self.log_box.pack(fill='both', expand=True)
 
+        self.log_box.tag_configure('header',  foreground=self.ACCENT, font=('Consolas', 9, 'bold'))
+        self.log_box.tag_configure('success', foreground=self.GREEN)
+        self.log_box.tag_configure('warning', foreground=self.YELLOW)
+        self.log_box.tag_configure('error',   foreground=self.RED)
+        self.log_box.tag_configure('info',    foreground=self.FG)
+
     def _build_buttons(self, parent):
         row = ttk.Frame(parent)
         row.pack(fill='x')
 
         ttk.Button(row, text="Effacer journal",
                    command=self._clear_log).pack(side='left')
+
+        self.open_btn = ttk.Button(row, text="Ouvrir le dossier de sortie",
+                                   command=self._open_output, state='disabled')
+        self.open_btn.pack(side='left', padx=(6, 0))
 
         self.stop_btn = ttk.Button(row, text="Annuler",
                                    command=self._cancel, state='disabled')
@@ -1057,6 +1174,47 @@ class App:
                 except tk.TclError:
                     pass
 
+    def _apply_profile(self, _event=None):
+        preset = self.PRESETS.get(self.profile_var.get())
+        if preset is None:
+            return
+        self.rem_chands.set(preset['remove_chands'])
+        self.rem_unused.set(preset['remove_unused'])
+        self.comp_tex.set(preset['compress_textures'])
+        self.max_res.set(preset['max_res'])
+        self.tex_qual.set(preset['quality'])
+        self.comp_snd.set(preset['compress_sounds'] and FFMPEG_AVAILABLE)
+        self.snd_qual.set(preset['sound_quality'])
+        self.zip_lvl.set(preset['zip_level'])
+        self._toggle_tex()
+        self._toggle_snd()
+        self._toggle_lua()
+
+    def _scan_source(self):
+        src = self.source_var.get().strip()
+        if not src or not Path(src).exists():
+            self.stats_var.set("")
+            return
+        self.stats_var.set("Analyse de la source…")
+        threading.Thread(target=self._scan_source_thread, args=(src,), daemon=True).start()
+
+    def _scan_source_thread(self, src: str):
+        try:
+            p = Path(src)
+            if p.is_file():
+                text = f"Fichier source : {Compressor._fmt_size(p.stat().st_size)}"
+            else:
+                count = 0
+                total = 0
+                for fp in p.rglob('*'):
+                    if fp.is_file():
+                        count += 1
+                        total += fp.stat().st_size
+                text = f"Source : {count} fichier(s) — {Compressor._fmt_size(total)}"
+        except OSError:
+            text = ""
+        self.root.after(0, lambda: self.stats_var.set(text))
+
     def _browse_source(self):
         if self.src_type.get() == 'gma':
             path = filedialog.askopenfilename(
@@ -1070,6 +1228,7 @@ class App:
             if not self.output_var.get():
                 p = Path(path)
                 self.output_var.set(str(p.parent / (p.stem + '_compressed')))
+            self._scan_source()
 
     def _browse_output(self):
         fmt = self.out_fmt.get()
@@ -1125,13 +1284,16 @@ class App:
 
         self.run_btn.configure(state='disabled')
         self.stop_btn.configure(state='normal')
+        self.open_btn.configure(state='disabled')
         self.prog_var.set(0)
+        self.file_var.set("")
 
         self._compressor = Compressor(
             opts,
             log_fn=self._log,
             progress_fn=self._set_prog,
             status_fn=self._set_status,
+            current_file_fn=self._set_current_file,
         )
         self._thread = threading.Thread(target=self._run_compressor, daemon=True)
         self._thread.start()
@@ -1143,15 +1305,44 @@ class App:
     def _on_done(self):
         self.run_btn.configure(state='normal')
         self.stop_btn.configure(state='disabled')
+        self.file_var.set("")
+        comp = self._compressor
+        if comp and comp.final_size is not None:
+            self.open_btn.configure(state='normal')
+            size = Compressor._fmt_size(comp.final_size)
+            self.stats_var.set(f"Terminé : {size}  (-{comp.reduction:.1f}%)")
 
     def _cancel(self):
         if self._compressor:
             self._compressor.cancel()
 
+    def _open_output(self):
+        out = Path(self.output_var.get().strip())
+        target = out if out.is_dir() else out.parent
+        try:
+            if sys.platform == 'win32':
+                os.startfile(str(target))
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', str(target)])
+            else:
+                subprocess.run(['xdg-open', str(target)])
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Impossible d'ouvrir le dossier :\n{e}")
+
     def _log(self, msg: str):
+        tag = 'info'
+        if msg.startswith('▶'):
+            tag = 'header'
+        elif '✗' in msg or 'ERREUR' in msg:
+            tag = 'error'
+        elif '⚠' in msg:
+            tag = 'warning'
+        elif '✓' in msg:
+            tag = 'success'
+
         def _do():
             self.log_box.configure(state='normal')
-            self.log_box.insert('end', msg + '\n')
+            self.log_box.insert('end', msg + '\n', tag)
             self.log_box.see('end')
             self.log_box.configure(state='disabled')
         self.root.after(0, _do)
@@ -1161,6 +1352,10 @@ class App:
 
     def _set_status(self, msg: str):
         self.root.after(0, lambda: self.status_var.set(msg))
+
+    def _set_current_file(self, name: str):
+        display = f"→ {name}" if name else ""
+        self.root.after(0, lambda: self.file_var.set(display))
 
     def _clear_log(self):
         self.log_box.configure(state='normal')
