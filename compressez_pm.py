@@ -347,7 +347,6 @@ STRINGS: dict[str, dict[str, str]] = {
 
     'log_app_version':    {'fr': "Compressez PM GMod  v{version}", 'en': "Compressez PM GMod  v{version}"},
     'log_install_pillow': {'fr': "→ pip install Pillow   (optimisation .png/.jpg/.tga)", 'en': "→ pip install Pillow   (.png/.jpg/.tga optimization)"},
-    'log_install_vtflib': {'fr': "→ pip install vtflib   (optimisation .vtf native)", 'en': "→ pip install vtflib   (native .vtf optimization)"},
 }
 
 
@@ -1963,8 +1962,6 @@ class App:
         self._log(libs)
         if not PIL_AVAILABLE:
             self._log(self.t('log_install_pillow'))
-        if not VTFLIB_AVAILABLE:
-            self._log(self.t('log_install_vtflib'))
         self._log("")
 
     # ── Bascules thème / langue / taille cible ────────────────────────────────
