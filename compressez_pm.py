@@ -59,6 +59,18 @@ FFMPEG_AVAILABLE = _check_ffmpeg()
 
 VERSION = "1.0.0"
 
+
+def _config_path() -> Path:
+    """Chemin du fichier de préférences utilisateur (multiplateforme)."""
+    if sys.platform == 'win32':
+        base = Path(os.environ.get('APPDATA', Path.home()))
+    else:
+        base = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
+    return base / 'CompressezPMGMod' / 'config.json'
+
+
+CONFIG_PATH = _config_path()
+
 # Patterns de fichiers C-Hands (bras à la première personne)
 CHAND_PATTERNS = [
     r"models/weapons/c_.*",
@@ -246,10 +258,11 @@ STRINGS: dict[str, dict[str, str]] = {
     'batch_done':           {'fr': "✓ Traitement par lot terminé : {n} addon(s)", 'en': "✓ Batch processing completed: {n} addon(s)"},
 
     # ─── Interface graphique ────────────────────────────────────────────────
-    'io_section':          {'fr': " Entrée / Sortie ", 'en': " Input / Output "},
+    'app_tagline':         {'fr': "Compresseur d'addons Playermodel pour Garry's Mod", 'en': "Playermodel addon compressor for Garry's Mod"},
+    'io_section':          {'fr': " 📁 Entrée / Sortie ", 'en': " 📁 Input / Output "},
     'label_source':        {'fr': "Source :", 'en': "Source:"},
     'label_output':        {'fr': "Sortie :", 'en': "Output:"},
-    'btn_browse':          {'fr': "Parcourir", 'en': "Browse"},
+    'btn_browse':          {'fr': "📂 Parcourir", 'en': "📂 Browse"},
     'label_source_type':   {'fr': "Type source :", 'en': "Source type:"},
     'radio_folder':        {'fr': "Dossier", 'en': "Folder"},
     'radio_gma_file':      {'fr': "Fichier .gma", 'en': ".gma file"},
@@ -268,7 +281,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'stats_source':      {'fr': "Source : {count} fichier(s) — {size}", 'en': "Source: {count} file(s) — {size}"},
     'stats_source_file': {'fr': "Fichier source : {size}", 'en': "Source file: {size}"},
     'stats_analyzing':   {'fr': "Analyse de la source…", 'en': "Analyzing source…"},
-    'stats_done':        {'fr': "Terminé : {size}  ({pct}%)", 'en': "Done: {size}  ({pct}%)"},
+    'stats_done':        {'fr': "✓ Terminé : {before} → {after}  (-{pct}%)", 'en': "✓ Done: {before} → {after}  (-{pct}%)"},
 
     'label_profile':    {'fr': "Profil rapide :", 'en': "Quick profile:"},
     'profile_hint':     {'fr': "  Ajuste automatiquement les réglages ci-dessous", 'en': "  Automatically adjusts the settings below"},
@@ -278,8 +291,8 @@ STRINGS: dict[str, dict[str, str]] = {
     'profile_minimal':  {'fr': "Taille minimale", 'en': "Minimum size"},
     'profile_share':    {'fr': "Partage rapide (Discord…)", 'en': "Quick share (Discord…)"},
 
-    'tab_general':  {'fr': " Général ", 'en': " General "},
-    'tab_advanced': {'fr': " Avancé ", 'en': " Advanced "},
+    'tab_general':  {'fr': " ⚙ Général ", 'en': " ⚙ General "},
+    'tab_advanced': {'fr': " 🛠 Avancé ", 'en': " 🛠 Advanced "},
 
     'chk_chands':  {'fr': "Supprimer les C-Hands", 'en': "Remove C-Hands"},
     'desc_chands': {'fr': "  Retire les bras à la 1ʳᵉ personne (c_arms, c_*)", 'en': "  Removes first-person arms (c_arms, c_*)"},
@@ -322,15 +335,15 @@ STRINGS: dict[str, dict[str, str]] = {
     'chk_batch':           {'fr': "Mode batch (plusieurs addons)", 'en': "Batch mode (multiple addons)"},
     'desc_batch':          {'fr': "  Source = dossier contenant plusieurs\n  sous-dossiers/.gma à traiter", 'en': "  Source = folder containing multiple\n  subfolders/.gma to process"},
 
-    'progress_section': {'fr': " Progression ", 'en': " Progress "},
+    'progress_section': {'fr': " 📊 Progression ", 'en': " 📊 Progress "},
     'status_ready':     {'fr': "Prêt", 'en': "Ready"},
 
-    'log_section': {'fr': " Journal ", 'en': " Log "},
+    'log_section': {'fr': " 📜 Journal ", 'en': " 📜 Log "},
 
-    'btn_clear_log':   {'fr': "Effacer journal", 'en': "Clear log"},
-    'btn_open_output': {'fr': "Ouvrir le dossier de sortie", 'en': "Open output folder"},
-    'btn_cancel':      {'fr': "Annuler", 'en': "Cancel"},
-    'btn_run':         {'fr': "  Compresser  ", 'en': "  Compress  "},
+    'btn_clear_log':   {'fr': "🗑 Effacer journal", 'en': "🗑 Clear log"},
+    'btn_open_output': {'fr': "📂 Ouvrir le dossier de sortie", 'en': "📂 Open output folder"},
+    'btn_cancel':      {'fr': "⏹ Annuler", 'en': "⏹ Cancel"},
+    'btn_run':         {'fr': "▶  Compresser  ", 'en': "▶  Compress  "},
     'btn_theme_light': {'fr': "☀ Thème clair", 'en': "☀ Light theme"},
     'btn_theme_dark':  {'fr': "🌙 Thème sombre", 'en': "🌙 Dark theme"},
 
@@ -471,6 +484,7 @@ class Compressor:
         self.set_status  = status_fn
         self.set_current_file = current_file_fn or (lambda *_: None)
         self.cancel_flag = threading.Event()
+        self.original_size: int | None = None
         self.final_size: int | None = None
         self.reduction: float | None = None
         self.lang        = opts.get('lang', 'fr')
@@ -499,6 +513,7 @@ class Compressor:
 
             self.log(self.t('files_loaded', n=len(files)))
             original_size = sum(len(v) for v in files.values())
+            self.original_size = original_size
             self.log(self.t('original_size', size=self._fmt_size(original_size)))
             self.log("")
 
@@ -1308,22 +1323,26 @@ class App:
     }
 
     def __init__(self):
-        self.lang = 'fr'
-        self.theme_name = 'dark'
+        saved = self._load_config()
+        self.lang = saved.get('lang', 'fr') if saved else 'fr'
+        self.theme_name = saved.get('theme_name', 'dark') if saved else 'dark'
         self._apply_palette()
 
         self.root = TkinterDnD.Tk() if DND_AVAILABLE else tk.Tk()
         self.root.title(f"Compressez PM GMod  v{VERSION}")
-        self.root.geometry("820x820")
+        self.root.geometry("820x950")
         self.root.configure(bg=self.BG)
         self.root.resizable(True, True)
-        self.root.minsize(700, 640)
+        self.root.minsize(700, 760)
+        self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
         self._compressor: Compressor | None = None
         self._thread: threading.Thread | None = None
 
         self._setup_styles()
         self._build_ui()
+        if saved:
+            self._restore_state(saved)
         self._log_header()
 
     # ── Internationalisation / thème ──────────────────────────────────────────
@@ -1362,7 +1381,7 @@ class App:
                     selectbackground=self.ACCENT, selectforeground=self.BG)
         s.configure('TScale',          background=self.BG, troughcolor=self.SURFACE)
         s.configure('TProgressbar',    background=self.ACCENT, troughcolor=self.SURFACE,
-                    bordercolor=self.SURFACE)
+                    bordercolor=self.SURFACE, thickness=12)
         s.configure('Accent.TButton',  background=self.ACCENT, foreground=self.BG,
                     font=('Segoe UI', 9, 'bold'), padding=(14, 5))
         s.configure('TNotebook',       background=self.BG, bordercolor=self.SURFACE)
@@ -1381,14 +1400,26 @@ class App:
 
     def _build_ui(self):
         # En-tête
-        hdr = tk.Frame(self.root, bg=self.SURFACE, pady=8)
+        hdr = tk.Frame(self.root, bg=self.SURFACE, pady=10)
         hdr.pack(fill='x')
-        tk.Label(hdr, text="Compressez PM GMod",
+
+        title_box = tk.Frame(hdr, bg=self.SURFACE)
+        title_box.pack(side='left', padx=14)
+
+        title_row = tk.Frame(title_box, bg=self.SURFACE)
+        title_row.pack(anchor='w')
+        tk.Label(title_row, text="🗜️", bg=self.SURFACE, fg=self.ACCENT,
+                 font=('Segoe UI', 16)).pack(side='left', padx=(0, 6))
+        tk.Label(title_row, text="Compressez PM GMod",
                  bg=self.SURFACE, fg=self.ACCENT,
-                 font=('Segoe UI', 14, 'bold')).pack(side='left', padx=14)
-        tk.Label(hdr, text=f"v{VERSION}",
+                 font=('Segoe UI', 14, 'bold')).pack(side='left')
+        tk.Label(title_row, text=f"  v{VERSION}",
                  bg=self.SURFACE, fg=self.SUB,
                  font=('Segoe UI', 9)).pack(side='left')
+
+        tk.Label(title_box, text=self.t('app_tagline'),
+                 bg=self.SURFACE, fg=self.SUB,
+                 font=('Segoe UI', 8)).pack(anchor='w')
 
         theme_key = 'btn_theme_light' if self.theme_name == 'dark' else 'btn_theme_dark'
         ttk.Button(hdr, text=self.t(theme_key), command=self._toggle_theme,
@@ -1396,6 +1427,8 @@ class App:
         lang_text = "English" if self.lang == 'fr' else "Français"
         ttk.Button(hdr, text=lang_text, command=self._toggle_language,
                    width=10).pack(side='right', padx=(0, 6))
+
+        tk.Frame(self.root, bg=self.ACCENT, height=2).pack(fill='x')
 
         # Corps principal avec scroll
         main = ttk.Frame(self.root, padding=(10, 8, 10, 10))
@@ -1668,11 +1701,22 @@ class App:
         frm = ttk.LabelFrame(parent, text=self.t('progress_section'), padding=8)
         frm.pack(fill='x', pady=(0, 6))
 
+        bar_row = ttk.Frame(frm)
+        bar_row.pack(fill='x')
+
         self.prog_var = tk.DoubleVar(value=0)
-        ttk.Progressbar(frm, variable=self.prog_var, maximum=100).pack(fill='x')
+        ttk.Progressbar(bar_row, variable=self.prog_var, maximum=100).pack(side='left', fill='x', expand=True)
+
+        self.prog_pct_var = tk.StringVar(value="0%")
+        ttk.Label(bar_row, textvariable=self.prog_pct_var, width=5, anchor='e',
+                  foreground=self.ACCENT, font=('Segoe UI', 9, 'bold')).pack(side='left', padx=(8, 0))
 
         status_row = ttk.Frame(frm)
         status_row.pack(fill='x', pady=(3, 0))
+
+        self.status_dot_lbl = tk.Label(status_row, text="●", bg=self.BG, fg=self.SUB,
+                                        font=('Segoe UI', 10))
+        self.status_dot_lbl.pack(side='left', padx=(0, 4))
 
         self.status_var = tk.StringVar(value=self.t('status_ready'))
         ttk.Label(status_row, textvariable=self.status_var,
@@ -1876,7 +1920,9 @@ class App:
         self.stop_btn.configure(state='normal')
         self.open_btn.configure(state='disabled')
         self.prog_var.set(0)
+        self.prog_pct_var.set("0%")
         self.file_var.set("")
+        self.status_dot_lbl.configure(fg=self.ACCENT)
 
         self._compressor = Compressor(
             opts,
@@ -1899,8 +1945,14 @@ class App:
         comp = self._compressor
         if comp and comp.final_size is not None:
             self.open_btn.configure(state='normal')
-            size = Compressor._fmt_size(comp.final_size)
-            self.stats_var.set(self.t('stats_done', size=size, pct=f"{comp.reduction:.1f}"))
+            before = Compressor._fmt_size(comp.original_size)
+            after = Compressor._fmt_size(comp.final_size)
+            self.stats_var.set(self.t('stats_done', before=before, after=after, pct=f"{comp.reduction:.1f}"))
+            self.status_dot_lbl.configure(fg=self.GREEN)
+        elif comp and comp.cancel_flag.is_set():
+            self.status_dot_lbl.configure(fg=self.YELLOW)
+        else:
+            self.status_dot_lbl.configure(fg=self.RED)
 
     def _cancel(self):
         if self._compressor:
@@ -1938,7 +1990,10 @@ class App:
         self.root.after(0, _do)
 
     def _set_prog(self, val: float):
-        self.root.after(0, lambda: self.prog_var.set(val))
+        def _do():
+            self.prog_var.set(val)
+            self.prog_pct_var.set(f"{val:.0f}%")
+        self.root.after(0, _do)
 
     def _set_status(self, msg: str):
         self.root.after(0, lambda: self.status_var.set(msg))
@@ -2006,33 +2061,56 @@ class App:
         }
 
     def _restore_state(self, state: dict):
-        self.source_var.set(state['source'])
-        self.output_var.set(state['output'])
-        self.src_type.set(state['src_type'])
-        self.out_fmt.set(state['out_fmt'])
-        self.profile_var.set(self._profile_label(state['profile_id']))
-        self.rem_chands.set(state['rem_chands'])
-        self.rem_unused.set(state['rem_unused'])
-        self.check_materials.set(state['check_materials'])
-        self.comp_tex.set(state['comp_tex'])
-        self.max_res.set(self.t('no_limit') if state['max_res_no_limit'] else state['max_res'])
-        self.tex_qual.set(state['tex_qual'])
-        self.gen_lua.set(state['gen_lua'])
-        self.lua_chands.set(state['lua_chands'])
-        self.comp_snd.set(state['comp_snd'])
-        self.snd_qual.set(state['snd_qual'])
-        self.zip_lvl.set(state['zip_lvl'])
-        self.dry_run.set(state['dry_run'])
-        self.backup.set(state['backup'])
-        self.target_size_enabled.set(state['target_size_enabled'])
-        self.target_size_mb.set(state['target_size_mb'])
-        self.batch.set(state['batch'])
+        self.source_var.set(state.get('source', ''))
+        self.output_var.set(state.get('output', ''))
+        self.src_type.set(state.get('src_type', 'folder'))
+        self.out_fmt.set(state.get('out_fmt', 'folder'))
+        self.profile_var.set(self._profile_label(state.get('profile_id', 'custom')))
+        self.rem_chands.set(state.get('rem_chands', True))
+        self.rem_unused.set(state.get('rem_unused', True))
+        self.check_materials.set(state.get('check_materials', True))
+        self.comp_tex.set(state.get('comp_tex', True))
+        self.max_res.set(self.t('no_limit') if state.get('max_res_no_limit', False) else state.get('max_res', '1024'))
+        self.tex_qual.set(state.get('tex_qual', 85))
+        self.gen_lua.set(state.get('gen_lua', True))
+        self.lua_chands.set(state.get('lua_chands', True))
+        self.comp_snd.set(state.get('comp_snd', False))
+        self.snd_qual.set(state.get('snd_qual', '128k'))
+        self.zip_lvl.set(state.get('zip_lvl', 6))
+        self.dry_run.set(state.get('dry_run', False))
+        self.backup.set(state.get('backup', False))
+        self.target_size_enabled.set(state.get('target_size_enabled', False))
+        self.target_size_mb.set(state.get('target_size_mb', '10'))
+        self.batch.set(state.get('batch', False))
 
         self._toggle_tex()
         self._toggle_snd()
         self._toggle_lua()
         self._toggle_target_size()
         self._scan_source()
+
+    # ── Préférences persistantes ──────────────────────────────────────────────
+
+    @staticmethod
+    def _load_config() -> dict | None:
+        try:
+            return json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            return None
+
+    def _save_config(self):
+        try:
+            state = self._collect_state()
+            state['lang'] = self.lang
+            state['theme_name'] = self.theme_name
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            CONFIG_PATH.write_text(json.dumps(state, indent=2), encoding='utf-8')
+        except OSError:
+            pass
+
+    def _on_close(self):
+        self._save_config()
+        self.root.destroy()
 
     def _rebuild(self):
         state = self._collect_state()
