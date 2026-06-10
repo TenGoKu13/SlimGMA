@@ -26,6 +26,12 @@ try:
 except ImportError:
     TK_AVAILABLE = False
 
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    DND_AVAILABLE = True
+except ImportError:
+    DND_AVAILABLE = False
+
 # ─── Dépendances optionnelles ────────────────────────────────────────────────
 
 try:
@@ -120,6 +126,241 @@ def _vtf_format_size(fmt: int, w: int, h: int) -> int | None:
         return bw * bh * unit
     return w * h * unit
 
+
+# Clés de matériaux VMT faisant référence à des fichiers .vtf
+VMT_TEXTURE_KEYS = {
+    'basetexture', 'basetexture2', 'bumpmap', 'bumpmap2', 'normalmap',
+    'normalmap2', 'envmapmask', 'detail', 'blendmodulatetexture',
+    'phongexponenttexture', 'phongwarptexture', 'lightwarptexture',
+    'selfillummask', 'ambientocclusiontexture', 'tooltexture', 'texture2',
+    'iris', 'corneatexture', 'displacementmap', 'blendmask',
+}
+
+
+# ─── Internationalisation (FR/EN) ────────────────────────────────────────────
+
+STRINGS: dict[str, dict[str, str]] = {
+    # CLI
+    'cli_header': {'fr': "Compressez PM GMod v{version} – mode CLI\n", 'en': "Compressez PM GMod v{version} – CLI mode\n"},
+
+    # Pipeline général
+    'loading_files':   {'fr': "Chargement des fichiers…", 'en': "Loading files…"},
+    'err_no_files':    {'fr': "✗ ERREUR : Aucun fichier trouvé dans la source.", 'en': "✗ ERROR: No files found in source."},
+    'files_loaded':    {'fr': "▶ {n} fichier(s) chargé(s)", 'en': "▶ {n} file(s) loaded"},
+    'original_size':   {'fr': "  Taille originale : {size}", 'en': "  Original size: {size}"},
+    'disabled':        {'fr': "  (désactivé)", 'en': "  (disabled)"},
+    'removed_n':       {'fr': "  ✓ {n} fichier(s) supprimé(s)", 'en': "  ✓ {n} file(s) removed"},
+
+    'step_chands':     {'fr': "▶ Étape {n}/{total} — C-Hands", 'en': "▶ Step {n}/{total} — C-Hands"},
+    'status_chands':   {'fr': "Suppression des C-Hands…", 'en': "Removing C-Hands…"},
+
+    'step_unused':     {'fr': "▶ Étape {n}/{total} — Fichiers inutiles", 'en': "▶ Step {n}/{total} — Unused files"},
+    'status_unused':   {'fr': "Suppression des fichiers inutiles…", 'en': "Removing unused files…"},
+
+    'step_materials':  {'fr': "▶ Étape {n}/{total} — Vérification des matériaux", 'en': "▶ Step {n}/{total} — Material check"},
+    'status_materials':{'fr': "Vérification des matériaux…", 'en': "Checking materials…"},
+
+    'step_textures':   {'fr': "▶ Étape {n}/{total} — Textures", 'en': "▶ Step {n}/{total} — Textures"},
+    'status_textures': {'fr': "Optimisation des textures…", 'en': "Optimizing textures…"},
+
+    'step_sounds':     {'fr': "▶ Étape {n}/{total} — Sons", 'en': "▶ Step {n}/{total} — Sounds"},
+    'status_sounds':   {'fr': "Compression des sons…", 'en': "Compressing sounds…"},
+    'ffmpeg_missing':  {'fr': "  ⚠ ffmpeg introuvable dans le PATH, étape ignorée", 'en': "  ⚠ ffmpeg not found in PATH, step skipped"},
+
+    'step_lua':        {'fr': "▶ Étape {n}/{total} — Fichier Lua PM", 'en': "▶ Step {n}/{total} — Lua PM file"},
+    'status_lua':      {'fr': "Génération du fichier Lua…", 'en': "Generating Lua file…"},
+
+    'step_write':      {'fr': "▶ Étape {n}/{total} — Écriture de la sortie", 'en': "▶ Step {n}/{total} — Writing output"},
+    'status_write':    {'fr': "Écriture de la sortie…", 'en': "Writing output…"},
+
+    'final_size':      {'fr': "✓ Taille finale  : {size}", 'en': "✓ Final size    : {size}"},
+    'final_reduction': {'fr': "✓ Réduction      : {pct}%", 'en': "✓ Reduction     : {pct}%"},
+    'success':         {'fr': "✓ Compression terminée avec succès !", 'en': "✓ Compression completed successfully!"},
+    'status_done':     {'fr': "Terminé !", 'en': "Done!"},
+    'cancelled':       {'fr': "\n⚠ Compression annulée.", 'en': "\n⚠ Compression cancelled."},
+    'status_cancelled':{'fr': "Annulé", 'en': "Cancelled"},
+    'error_generic':   {'fr': "\n✗ ERREUR : {e}", 'en': "\n✗ ERROR: {e}"},
+    'status_error':    {'fr': "Erreur !", 'en': "Error!"},
+
+    # C-Hands / fichiers inutiles
+    'removed_chand':       {'fr': "  Supprimé C-Hand : {path}", 'en': "  Removed C-Hand: {path}"},
+    'removed_unused_file': {'fr': "  Supprimé inutile : {path}", 'en': "  Removed unused file: {path}"},
+
+    # Textures
+    'no_textures':     {'fr': "  Aucune texture trouvée.", 'en': "  No textures found."},
+    'textures_found':  {'fr': "  {n} texture(s) trouvée(s)…", 'en': "  {n} texture(s) found…"},
+    'no_res_limit':    {'fr': "  Résolution max : aucune limite (les .vtf seront copiés tels quels)", 'en': "  Max resolution: no limit (.vtf files copied as-is)"},
+    'no_vtflib':       {'fr': "  vtflib non installé : réduction des .vtf par troncature de mipmaps (résolution max {max_res}px)", 'en': "  vtflib not installed: .vtf reduced via mipmap truncation (max resolution {max_res}px)"},
+    'texture_saving':  {'fr': "  {path} : -{size}", 'en': "  {path}: -{size}"},
+    'textures_reduced':{'fr': "  Textures réduites : {reduced}/{total}", 'en': "  Textures reduced: {reduced}/{total}"},
+    'vtf_unchanged':   {'fr': "  .vtf inchangés : {n} (déjà sous la résolution max, ou format/structure non pris en charge)", 'en': "  .vtf unchanged: {n} (already under max resolution, or unsupported format/structure)"},
+    'no_limit':        {'fr': "Aucune limite", 'en': "No limit"},
+
+    # Sons
+    'no_sounds':    {'fr': "  Aucun son trouvé.", 'en': "  No sounds found."},
+    'sounds_found': {'fr': "  {n} son(s) trouvé(s)…", 'en': "  {n} sound(s) found…"},
+    'sound_saving': {'fr': "  {path} → {new_path} : -{size}", 'en': "  {path} → {new_path}: -{size}"},
+    'sound_error':  {'fr': "  Erreur son {path}: {e}", 'en': "  Sound error {path}: {e}"},
+
+    # Lua
+    'lua_no_models_player': {'fr': "  Lua : aucun .mdl dans models/player/, utilisation des modèles trouvés ailleurs dans models/", 'en': "  Lua: no .mdl in models/player/, using models found elsewhere in models/"},
+    'lua_no_models':        {'fr': "  Lua : aucun .mdl trouvé dans models/ – ignoré", 'en': "  Lua: no .mdl found in models/ – skipped"},
+    'lua_model_detected':   {'fr': "  Lua : modèle détecté → {path}", 'en': "  Lua: model detected → {path}"},
+    'lua_models_found':     {'fr': "  Lua : {n} modèle(s) trouvé(s)", 'en': "  Lua: {n} model(s) found"},
+    'lua_updated':          {'fr': "  Lua mis à jour : {path}", 'en': "  Lua updated: {path}"},
+    'lua_created':          {'fr': "  Lua créé : {path}", 'en': "  Lua created: {path}"},
+
+    # Écriture
+    'write_folder': {'fr': "  Dossier : {path}/", 'en': "  Folder: {path}/"},
+    'write_gma':    {'fr': "  GMA : {path}", 'en': "  GMA: {path}"},
+    'write_zip':    {'fr': "  ZIP : {path}", 'en': "  ZIP: {path}"},
+
+    # Mode aperçu (dry-run)
+    'dry_run_active':             {'fr': "  🔍 Mode aperçu activé : aucune modification ne sera écrite sur le disque", 'en': "  🔍 Dry-run mode enabled: nothing will be written to disk"},
+    'dry_run_would_write_folder': {'fr': "  [APERÇU] Aurait écrit le dossier : {path}/ ({n} fichier(s))", 'en': "  [DRY-RUN] Would write folder: {path}/ ({n} file(s))"},
+    'dry_run_would_write_gma':    {'fr': "  [APERÇU] Aurait écrit le GMA : {path}", 'en': "  [DRY-RUN] Would write GMA: {path}"},
+    'dry_run_would_write_zip':    {'fr': "  [APERÇU] Aurait écrit le ZIP : {path}", 'en': "  [DRY-RUN] Would write ZIP: {path}"},
+
+    # Sauvegarde de l'original
+    'backup_created': {'fr': "  ✓ Sauvegarde de l'original créée : {path}", 'en': "  ✓ Backup of original created: {path}"},
+    'backup_failed':  {'fr': "  ⚠ Sauvegarde impossible : {e}", 'en': "  ⚠ Backup failed: {e}"},
+
+    # Mode taille cible
+    'step_target_size':   {'fr': "  ▶ Mode taille cible — objectif : {size}", 'en': "  ▶ Target size mode — goal: {size}"},
+    'target_attempt':     {'fr': "    Tentative {n} : résolution={res}, qualité={q} → {size}", 'en': "    Attempt {n}: resolution={res}, quality={q} → {size}"},
+    'target_reached':     {'fr': "  ✓ Taille cible atteinte : {size} ≤ {target}", 'en': "  ✓ Target size reached: {size} ≤ {target}"},
+    'target_not_reached': {'fr': "  ⚠ Taille cible non atteinte ({size} > {target}), réglages les plus agressifs appliqués", 'en': "  ⚠ Target size not reached ({size} > {target}), most aggressive settings applied"},
+
+    # Détection de matériaux/textures manquants
+    'no_vmt':                  {'fr': "  Aucun fichier .vmt trouvé.", 'en': "  No .vmt file found."},
+    'missing_texture':         {'fr': "  ⚠ Texture manquante : {texture} (référencée dans {vmt})", 'en': "  ⚠ Missing texture: {texture} (referenced in {vmt})"},
+    'missing_textures_none':   {'fr': "  ✓ Aucune texture manquante détectée ({n} .vmt vérifié(s))", 'en': "  ✓ No missing textures detected ({n} .vmt checked)"},
+    'missing_textures_found':  {'fr': "  ⚠ {n} texture(s) manquante(s) détectée(s)", 'en': "  ⚠ {n} missing texture(s) detected"},
+
+    # Mode batch
+    'batch_none':           {'fr': "✗ ERREUR : Aucun addon trouvé pour le mode batch (sous-dossiers ou .gma attendus dans la source).", 'en': "✗ ERROR: No addon found for batch mode (subfolders or .gma files expected in source)."},
+    'batch_found':          {'fr': "▶ Mode batch : {n} addon(s) détecté(s) dans {path}", 'en': "▶ Batch mode: {n} addon(s) detected in {path}"},
+    'batch_processing':     {'fr': "▶ ─── Addon {i}/{n} : {name} ───", 'en': "▶ ─── Addon {i}/{n}: {name} ───"},
+    'batch_summary_header': {'fr': "▶ ═══ Résumé du traitement par lot ═══", 'en': "▶ ═══ Batch processing summary ═══"},
+    'batch_summary_line':   {'fr': "  {name} : {size}  ({pct}%)", 'en': "  {name}: {size}  ({pct}%)"},
+    'batch_done':           {'fr': "✓ Traitement par lot terminé : {n} addon(s)", 'en': "✓ Batch processing completed: {n} addon(s)"},
+
+    # ─── Interface graphique ────────────────────────────────────────────────
+    'io_section':          {'fr': " Entrée / Sortie ", 'en': " Input / Output "},
+    'label_source':        {'fr': "Source :", 'en': "Source:"},
+    'label_output':        {'fr': "Sortie :", 'en': "Output:"},
+    'btn_browse':          {'fr': "Parcourir", 'en': "Browse"},
+    'label_source_type':   {'fr': "Type source :", 'en': "Source type:"},
+    'radio_folder':        {'fr': "Dossier", 'en': "Folder"},
+    'radio_gma_file':      {'fr': "Fichier .gma", 'en': ".gma file"},
+    'label_output_format': {'fr': "Format sortie :", 'en': "Output format:"},
+    'drop_hint':           {'fr': "  (glissez-déposez un dossier ou .gma ici)", 'en': "  (drag & drop a folder or .gma here)"},
+
+    'dialog_select_gma':    {'fr': "Sélectionner un fichier GMA", 'en': "Select a GMA file"},
+    'dialog_select_folder': {'fr': "Sélectionner le dossier de l'addon", 'en': "Select the addon folder"},
+    'dialog_output_folder': {'fr': "Dossier de sortie", 'en': "Output folder"},
+    'dialog_save_gma':      {'fr': "Enregistrer le GMA", 'en': "Save GMA"},
+    'dialog_save_zip':      {'fr': "Enregistrer l'archive ZIP", 'en': "Save ZIP archive"},
+    'filetype_gma':         {'fr': "Fichiers GMA", 'en': "GMA files"},
+    'filetype_all':         {'fr': "Tous les fichiers", 'en': "All files"},
+    'filetype_zip':         {'fr': "Archives ZIP", 'en': "ZIP archives"},
+
+    'stats_source':      {'fr': "Source : {count} fichier(s) — {size}", 'en': "Source: {count} file(s) — {size}"},
+    'stats_source_file': {'fr': "Fichier source : {size}", 'en': "Source file: {size}"},
+    'stats_analyzing':   {'fr': "Analyse de la source…", 'en': "Analyzing source…"},
+    'stats_done':        {'fr': "Terminé : {size}  ({pct}%)", 'en': "Done: {size}  ({pct}%)"},
+
+    'label_profile':    {'fr': "Profil rapide :", 'en': "Quick profile:"},
+    'profile_hint':     {'fr': "  Ajuste automatiquement les réglages ci-dessous", 'en': "  Automatically adjusts the settings below"},
+    'profile_custom':   {'fr': "Personnalisé", 'en': "Custom"},
+    'profile_balanced': {'fr': "Équilibré (recommandé)", 'en': "Balanced (recommended)"},
+    'profile_quality':  {'fr': "Qualité maximale", 'en': "Maximum quality"},
+    'profile_minimal':  {'fr': "Taille minimale", 'en': "Minimum size"},
+    'profile_share':    {'fr': "Partage rapide (Discord…)", 'en': "Quick share (Discord…)"},
+
+    'tab_general':  {'fr': " Général ", 'en': " General "},
+    'tab_advanced': {'fr': " Avancé ", 'en': " Advanced "},
+
+    'chk_chands':  {'fr': "Supprimer les C-Hands", 'en': "Remove C-Hands"},
+    'desc_chands': {'fr': "  Retire les bras à la 1ʳᵉ personne (c_arms, c_*)", 'en': "  Removes first-person arms (c_arms, c_*)"},
+    'chk_unused':  {'fr': "Supprimer les fichiers inutiles", 'en': "Remove unused files"},
+    'desc_unused': {'fr': "  .txt, .md, .pdf, .psd, .log…", 'en': "  .txt, .md, .pdf, .psd, .log…"},
+
+    'chk_textures':  {'fr': "Optimiser les textures", 'en': "Optimize textures"},
+    'label_max_res': {'fr': "Résolution max :", 'en': "Max resolution:"},
+    'label_quality': {'fr': "Qualité :", 'en': "Quality:"},
+    'pillow_hint':   {'fr': "⚠  pip install Pillow  pour les images non-VTF", 'en': "⚠  pip install Pillow  for non-VTF images"},
+
+    'chk_lua':         {'fr': "Générer le fichier Lua PM", 'en': "Generate Lua PM file"},
+    'desc_lua':        {'fr': "  Crée/met à jour lua/autorun/sh_*_pm.lua", 'en': "  Creates/updates lua/autorun/sh_*_pm.lua"},
+    'chk_lua_chands':  {'fr': "Inclure les C-Hands dans le Lua", 'en': "Include C-Hands in Lua"},
+    'desc_lua_chands': {'fr': "  Ajoute le hook PlayerSetHandsModel si\n  les c_arms sont présents", 'en': "  Adds the PlayerSetHandsModel hook if\n  c_arms are present"},
+
+    'chk_sounds':         {'fr': "Compresser les sons", 'en': "Compress sounds"},
+    'ffmpeg_ok':          {'fr': "✓ ffmpeg détecté", 'en': "✓ ffmpeg detected"},
+    'ffmpeg_missing_lbl': {'fr': "⚠  ffmpeg introuvable dans le PATH", 'en': "⚠  ffmpeg not found in PATH"},
+    'label_bitrate':      {'fr': "Bitrate :", 'en': "Bitrate:"},
+    'label_zip_level':    {'fr': "Niveau de compression ZIP :", 'en': "ZIP compression level:"},
+    'zip_fast':           {'fr': "Rapide", 'en': "Fast"},
+    'zip_max':            {'fr': "Max", 'en': "Max"},
+    'libs_detected':      {'fr': "Bibliothèques détectées :", 'en': "Detected libraries:"},
+    'lib_pillow':         {'fr': "Pillow (.png/.jpg/.tga)", 'en': "Pillow (.png/.jpg/.tga)"},
+    'lib_vtflib':         {'fr': "vtflib (.vtf natif)", 'en': "vtflib (native .vtf)"},
+    'lib_ffmpeg':         {'fr': "ffmpeg (sons)", 'en': "ffmpeg (sounds)"},
+    'vtf_note':           {'fr': "\nSans vtflib, les .vtf sont réduits par\ntroncature de mipmaps (résolution\nmax respectée, sans dépendance).",
+                            'en': "\nWithout vtflib, .vtf files are reduced\nvia mipmap truncation (max resolution\nrespected, no dependency)."},
+
+    # Nouvelles options (onglet Avancé)
+    'chk_check_materials': {'fr': "Vérifier les matériaux/textures manquants", 'en': "Check for missing materials/textures"},
+    'chk_dry_run':         {'fr': "Mode aperçu (dry-run)", 'en': "Dry-run (preview) mode"},
+    'desc_dry_run':        {'fr': "  Affiche les changements sans rien écrire", 'en': "  Shows changes without writing anything"},
+    'chk_backup':          {'fr': "Sauvegarder l'original avant écrasement", 'en': "Back up original before overwrite"},
+    'desc_backup':         {'fr': "  Copie de sécurité horodatée", 'en': "  Timestamped safety copy"},
+    'chk_target_size':     {'fr': "Taille cible :", 'en': "Target size:"},
+    'label_mb':            {'fr': "Mo", 'en': "MB"},
+    'desc_target_size':    {'fr': "  Ajuste résolution/qualité pour atteindre\n  la taille visée", 'en': "  Adjusts resolution/quality to reach\n  the target size"},
+    'chk_batch':           {'fr': "Mode batch (plusieurs addons)", 'en': "Batch mode (multiple addons)"},
+    'desc_batch':          {'fr': "  Source = dossier contenant plusieurs\n  sous-dossiers/.gma à traiter", 'en': "  Source = folder containing multiple\n  subfolders/.gma to process"},
+
+    'progress_section': {'fr': " Progression ", 'en': " Progress "},
+    'status_ready':     {'fr': "Prêt", 'en': "Ready"},
+
+    'log_section': {'fr': " Journal ", 'en': " Log "},
+
+    'btn_clear_log':   {'fr': "Effacer journal", 'en': "Clear log"},
+    'btn_open_output': {'fr': "Ouvrir le dossier de sortie", 'en': "Open output folder"},
+    'btn_cancel':      {'fr': "Annuler", 'en': "Cancel"},
+    'btn_run':         {'fr': "  Compresser  ", 'en': "  Compress  "},
+    'btn_theme_light': {'fr': "☀ Thème clair", 'en': "☀ Light theme"},
+    'btn_theme_dark':  {'fr': "🌙 Thème sombre", 'en': "🌙 Dark theme"},
+
+    'msg_source_missing_title':   {'fr': "Source manquante", 'en': "Missing source"},
+    'msg_source_missing_body':    {'fr': "Veuillez sélectionner un dossier ou fichier source.", 'en': "Please select a source folder or file."},
+    'msg_output_missing_title':   {'fr': "Sortie manquante", 'en': "Missing output"},
+    'msg_output_missing_body':    {'fr': "Veuillez indiquer un chemin de sortie.", 'en': "Please specify an output path."},
+    'msg_source_not_found_title': {'fr': "Source introuvable", 'en': "Source not found"},
+    'msg_source_not_found_body':  {'fr': "Le chemin n'existe pas :\n{src}", 'en': "Path does not exist:\n{src}"},
+    'msg_error_title':             {'fr': "Erreur", 'en': "Error"},
+    'msg_open_folder_error':       {'fr': "Impossible d'ouvrir le dossier :\n{e}", 'en': "Could not open folder:\n{e}"},
+    'msg_invalid_target_size_title': {'fr': "Taille cible invalide", 'en': "Invalid target size"},
+    'msg_invalid_target_size_body':  {'fr': "Veuillez entrer un nombre valide pour la taille cible (Mo).", 'en': "Please enter a valid number for the target size (MB)."},
+
+    'log_app_version':    {'fr': "Compressez PM GMod  v{version}", 'en': "Compressez PM GMod  v{version}"},
+    'log_install_pillow': {'fr': "→ pip install Pillow   (optimisation .png/.jpg/.tga)", 'en': "→ pip install Pillow   (.png/.jpg/.tga optimization)"},
+    'log_install_vtflib': {'fr': "→ pip install vtflib   (optimisation .vtf native)", 'en': "→ pip install vtflib   (native .vtf optimization)"},
+}
+
+
+def t(key: str, lang: str = 'fr', **kwargs) -> str:
+    """Traduit une clé STRINGS dans la langue demandée (repli sur le français)."""
+    entry = STRINGS.get(key, {})
+    text = entry.get(lang, entry.get('fr', key))
+    if kwargs:
+        try:
+            return text.format(**kwargs)
+        except (KeyError, IndexError):
+            return text
+    return text
 
 
 # ─── Lecteur/Écrivain GMA ────────────────────────────────────────────────────
@@ -222,6 +463,8 @@ class GMAFile:
 class Compressor:
     """Logique de compression principale"""
 
+    TOTAL_STEPS = 7
+
     def __init__(self, opts: dict, log_fn, progress_fn, status_fn, current_file_fn=None):
         self.opts        = opts
         self.log         = log_fn
@@ -231,80 +474,109 @@ class Compressor:
         self.cancel_flag = threading.Event()
         self.final_size: int | None = None
         self.reduction: float | None = None
+        self.lang        = opts.get('lang', 'fr')
+
+    def t(self, key: str, **kwargs) -> str:
+        return t(key, self.lang, **kwargs)
 
     def cancel(self):
         self.cancel_flag.set()
 
     def run(self):
+        if self.opts.get('batch'):
+            self._run_batch()
+            return
+
         try:
             src = Path(self.opts['source'])
+            T = self.TOTAL_STEPS
 
-            self.set_status("Chargement des fichiers…")
+            self.set_status(self.t('loading_files'))
             files = self._load_files(src)
 
             if not files:
-                self.log("✗ ERREUR : Aucun fichier trouvé dans la source.")
+                self.log(self.t('err_no_files'))
                 return
 
-            self.log(f"▶ {len(files)} fichier(s) chargé(s)")
+            self.log(self.t('files_loaded', n=len(files)))
             original_size = sum(len(v) for v in files.values())
-            self.log(f"  Taille originale : {self._fmt_size(original_size)}")
+            self.log(self.t('original_size', size=self._fmt_size(original_size)))
             self.log("")
 
+            if self.opts.get('dry_run'):
+                self.log(self.t('dry_run_active'))
+                self.log("")
+
             # ── Étape 1 : C-Hands ──────────────────────────────────────────
-            self.log("▶ Étape 1/6 — C-Hands")
+            self.log(self.t('step_chands', n=1, total=T))
             if self.opts.get('remove_chands') and not self.cancel_flag.is_set():
-                self.set_status("Suppression des C-Hands…")
+                self.set_status(self.t('status_chands'))
                 removed = self._remove_chands(files)
-                self.log(f"  ✓ {removed} fichier(s) supprimé(s)")
+                self.log(self.t('removed_n', n=removed))
             else:
-                self.log("  (désactivé)")
-            self.set_progress(20)
+                self.log(self.t('disabled'))
+            self.set_progress(15)
 
             # ── Étape 2 : Fichiers inutiles ────────────────────────────────
-            self.log("▶ Étape 2/6 — Fichiers inutiles")
+            self.log(self.t('step_unused', n=2, total=T))
             if self.opts.get('remove_unused') and not self.cancel_flag.is_set():
-                self.set_status("Suppression des fichiers inutiles…")
+                self.set_status(self.t('status_unused'))
                 removed = self._remove_unused(files)
-                self.log(f"  ✓ {removed} fichier(s) supprimé(s)")
+                self.log(self.t('removed_n', n=removed))
             else:
-                self.log("  (désactivé)")
-            self.set_progress(35)
+                self.log(self.t('disabled'))
+            self.set_progress(25)
 
-            # ── Étape 3 : Textures ─────────────────────────────────────────
-            self.log("▶ Étape 3/6 — Textures")
+            # ── Étape 3 : Vérification des matériaux ───────────────────────
+            self.log(self.t('step_materials', n=3, total=T))
+            if self.opts.get('check_materials', True) and not self.cancel_flag.is_set():
+                self.set_status(self.t('status_materials'))
+                self._check_missing_textures(files)
+            else:
+                self.log(self.t('disabled'))
+            self.set_progress(30)
+
+            # ── Étape 4 : Textures ─────────────────────────────────────────
+            self.log(self.t('step_textures', n=4, total=T))
             if self.opts.get('compress_textures') and not self.cancel_flag.is_set():
-                self.set_status("Optimisation des textures…")
-                self._optimize_textures(files)
+                self.set_status(self.t('status_textures'))
+                if self.opts.get('target_size_mb'):
+                    original_files = dict(files)
+                    self._run_target_size_mode(files, original_files)
+                else:
+                    max_res_str = self.opts.get('max_resolution', '1024')
+                    quality     = self.opts.get('texture_quality', 85)
+                    max_res     = int(max_res_str) if str(max_res_str).isdigit() else None
+                    self._optimize_textures(files, max_res, quality)
             else:
-                self.log("  (désactivé)")
-            self.set_progress(65)
+                self.log(self.t('disabled'))
+            self.set_progress(60)
 
-            # ── Étape 4 : Sons ─────────────────────────────────────────────
-            self.log("▶ Étape 4/6 — Sons")
+            # ── Étape 5 : Sons ─────────────────────────────────────────────
+            self.log(self.t('step_sounds', n=5, total=T))
             if self.opts.get('compress_sounds') and not self.cancel_flag.is_set():
                 if FFMPEG_AVAILABLE:
-                    self.set_status("Compression des sons…")
+                    self.set_status(self.t('status_sounds'))
                     self._compress_sounds(files)
                 else:
-                    self.log("  ⚠ ffmpeg introuvable dans le PATH, étape ignorée")
+                    self.log(self.t('ffmpeg_missing'))
             else:
-                self.log("  (désactivé)")
-            self.set_progress(80)
+                self.log(self.t('disabled'))
+            self.set_progress(75)
 
-            # ── Étape 5 : Lua PM ───────────────────────────────────────────
-            self.log("▶ Étape 5/6 — Fichier Lua PM")
+            # ── Étape 6 : Lua PM ───────────────────────────────────────────
+            self.log(self.t('step_lua', n=6, total=T))
             if self.opts.get('gen_lua') and not self.cancel_flag.is_set():
-                self.set_status("Génération du fichier Lua…")
+                self.set_status(self.t('status_lua'))
                 self._generate_lua(files, Path(self.opts['source']).stem)
             else:
-                self.log("  (désactivé)")
-            self.set_progress(90)
+                self.log(self.t('disabled'))
+            self.set_progress(85)
 
-            # ── Étape 6 : Écriture ─────────────────────────────────────────
-            self.log("▶ Étape 6/6 — Écriture de la sortie")
+            # ── Étape 7 : Écriture ─────────────────────────────────────────
+            self.log(self.t('step_write', n=7, total=T))
             if not self.cancel_flag.is_set():
-                self.set_status("Écriture de la sortie…")
+                self.set_status(self.t('status_write'))
                 self._write_output(files, src)
             self.set_progress(100)
             self.set_current_file("")
@@ -315,19 +587,19 @@ class Compressor:
                 self.final_size = final_size
                 self.reduction  = reduction
                 self.log("")
-                self.log(f"✓ Taille finale  : {self._fmt_size(final_size)}")
-                self.log(f"✓ Réduction      : {reduction:.1f}%")
-                self.log("✓ Compression terminée avec succès !")
-                self.set_status("Terminé !")
+                self.log(self.t('final_size', size=self._fmt_size(final_size)))
+                self.log(self.t('final_reduction', pct=f"{reduction:.1f}"))
+                self.log(self.t('success'))
+                self.set_status(self.t('status_done'))
             else:
-                self.log("\n⚠ Compression annulée.")
-                self.set_status("Annulé")
+                self.log(self.t('cancelled'))
+                self.set_status(self.t('status_cancelled'))
 
         except Exception as e:
             import traceback
-            self.log(f"\n✗ ERREUR : {e}")
+            self.log(self.t('error_generic', e=e))
             self.log(traceback.format_exc())
-            self.set_status("Erreur !")
+            self.set_status(self.t('status_error'))
 
     # ── Chargement ───────────────────────────────────────────────────────────
 
@@ -360,7 +632,7 @@ class Compressor:
             for pattern in CHAND_PATTERNS:
                 if re.match(pattern, path, re.IGNORECASE):
                     to_remove.append(path)
-                    self.log(f"  Supprimé C-Hand : {path}")
+                    self.log(self.t('removed_chand', path=path))
                     break
         for p in to_remove:
             del files[p]
@@ -373,31 +645,81 @@ class Compressor:
                 continue
             if Path(path).suffix.lower() in USELESS_EXTENSIONS:
                 to_remove.append(path)
-                self.log(f"  Supprimé inutile : {path}")
+                self.log(self.t('removed_unused_file', path=path))
         for p in to_remove:
             del files[p]
         return len(to_remove)
 
+    # ── Vérification des matériaux ───────────────────────────────────────────
+
+    @staticmethod
+    def _resolve_vtf_path(ref: str) -> str:
+        ref = ref.strip().strip('"\'').replace('\\', '/').lower().lstrip('/')
+        if not ref:
+            return ''
+        if not ref.endswith('.vtf'):
+            ref += '.vtf'
+        if not ref.startswith('materials/'):
+            ref = 'materials/' + ref
+        return ref
+
+    def _check_missing_textures(self, files: dict) -> None:
+        vmt_files = {k: v for k, v in files.items() if k.endswith('.vmt')}
+        if not vmt_files:
+            self.log(self.t('no_vmt'))
+            return
+
+        existing = set(files.keys())
+        pattern = re.compile(r'\$(\w+)"?\s+"([^"]*)"', re.IGNORECASE)
+        missing_total = 0
+        checked = 0
+
+        for vmt_path, data in vmt_files.items():
+            if self.cancel_flag.is_set():
+                break
+            try:
+                text = data.decode('utf-8', errors='replace')
+            except Exception:
+                continue
+            checked += 1
+            seen_refs = set()
+            for m in pattern.finditer(text):
+                key = m.group(1).lower()
+                if key not in VMT_TEXTURE_KEYS:
+                    continue
+                ref = m.group(2).strip()
+                if not ref or ref.lower() == 'env_cubemap':
+                    continue
+                tex_path = self._resolve_vtf_path(ref)
+                if not tex_path or tex_path in seen_refs:
+                    continue
+                seen_refs.add(tex_path)
+                if tex_path not in existing:
+                    self.log(self.t('missing_texture', texture=tex_path, vmt=vmt_path))
+                    missing_total += 1
+
+        if missing_total == 0:
+            self.log(self.t('missing_textures_none', n=checked))
+        else:
+            self.log(self.t('missing_textures_found', n=missing_total))
+
     # ── Textures ──────────────────────────────────────────────────────────────
 
-    def _optimize_textures(self, files: dict) -> None:
-        max_res_str = self.opts.get('max_resolution', '1024')
-        quality     = self.opts.get('texture_quality', 85)
-        max_res     = None if max_res_str == 'Aucune limite' else int(max_res_str)
-
+    def _optimize_textures(self, files: dict, max_res, quality: int, quiet: bool = False) -> None:
         tex_files = {k: v for k, v in files.items()
                      if Path(k).suffix.lower() in TEXTURE_EXTENSIONS and k != '__meta__'}
 
         if not tex_files:
-            self.log("  Aucune texture trouvée.")
+            if not quiet:
+                self.log(self.t('no_textures'))
             return
 
-        self.log(f"  {len(tex_files)} texture(s) trouvée(s)…")
-        if max_res is None:
-            self.log("  Résolution max : aucune limite (les .vtf seront copiés tels quels)")
-        elif not VTFLIB_AVAILABLE:
-            self.log(f"  vtflib non installé : réduction des .vtf par troncature de "
-                     f"mipmaps (résolution max {max_res}px)")
+        if not quiet:
+            self.log(self.t('textures_found', n=len(tex_files)))
+            if max_res is None:
+                self.log(self.t('no_res_limit'))
+            elif not VTFLIB_AVAILABLE:
+                self.log(self.t('no_vtflib', max_res=max_res))
 
         total = len(tex_files)
         reduced = 0
@@ -407,7 +729,8 @@ class Compressor:
             if self.cancel_flag.is_set():
                 break
 
-            self.set_current_file(path)
+            if not quiet:
+                self.set_current_file(path)
             ext = Path(path).suffix.lower()
             new_data = None
 
@@ -418,18 +741,72 @@ class Compressor:
 
             if new_data and len(new_data) < len(data):
                 savings = len(data) - len(new_data)
-                self.log(f"  {path} : -{self._fmt_size(savings)}")
+                if not quiet:
+                    self.log(self.t('texture_saving', path=path, size=self._fmt_size(savings)))
                 files[path] = new_data
                 reduced += 1
             elif ext == '.vtf':
                 unchanged_vtf += 1
 
-            self.set_progress(35 + (i / total) * 30)
+            if not quiet:
+                self.set_progress(30 + (i / total) * 30)
 
-        self.log(f"  Textures réduites : {reduced}/{total}")
-        if unchanged_vtf:
-            self.log(f"  .vtf inchangés : {unchanged_vtf} "
-                     f"(déjà sous la résolution max, ou format/structure non pris en charge)")
+        if not quiet:
+            self.log(self.t('textures_reduced', reduced=reduced, total=total))
+            if unchanged_vtf:
+                self.log(self.t('vtf_unchanged', n=unchanged_vtf))
+
+    # ── Mode taille cible ────────────────────────────────────────────────────
+
+    def _target_size_steps(self) -> list[tuple[int | None, int]]:
+        max_res_str = self.opts.get('max_resolution', '1024')
+        quality     = int(self.opts.get('texture_quality', 85))
+        base_res    = int(max_res_str) if str(max_res_str).isdigit() else None
+
+        all_res = [2048, 1024, 512, 256, 128]
+        res_list = [r for r in all_res if base_res is None or r <= base_res]
+        if base_res is not None and base_res not in res_list:
+            res_list.insert(0, base_res)
+        if not res_list:
+            res_list = [128]
+
+        qual_list = sorted({q for q in (quality, 75, 60, 45, 30) if 10 <= q <= 100}, reverse=True)
+
+        steps: list[tuple[int | None, int]] = []
+        for res in res_list:
+            for q in qual_list:
+                if (res, q) not in steps:
+                    steps.append((res, q))
+        return steps
+
+    def _run_target_size_mode(self, files: dict, original_files: dict) -> None:
+        target_bytes = int(self.opts['target_size_mb'] * 1024 * 1024)
+        self.log(self.t('step_target_size', size=self._fmt_size(target_bytes)))
+
+        steps = self._target_size_steps()
+        chosen = steps[-1]
+        chosen_size = None
+
+        for i, (res, quality) in enumerate(steps, 1):
+            if self.cancel_flag.is_set():
+                return
+            trial = dict(original_files)
+            self._optimize_textures(trial, res, quality, quiet=True)
+            size = sum(len(v) for v in trial.values())
+            res_label = f"{res}px" if res else self.t('no_limit')
+            self.log(self.t('target_attempt', n=i, res=res_label, q=quality, size=self._fmt_size(size)))
+            chosen, chosen_size = (res, quality), size
+            if size <= target_bytes:
+                break
+
+        files.clear()
+        files.update(original_files)
+        self._optimize_textures(files, chosen[0], chosen[1])
+
+        if chosen_size is not None and chosen_size <= target_bytes:
+            self.log(self.t('target_reached', size=self._fmt_size(chosen_size), target=self._fmt_size(target_bytes)))
+        else:
+            self.log(self.t('target_not_reached', size=self._fmt_size(chosen_size or 0), target=self._fmt_size(target_bytes)))
 
     def _process_vtf(self, path: str, data: bytes, max_res, quality: int) -> bytes:
         if VTFLIB_AVAILABLE:
@@ -578,10 +955,10 @@ class Compressor:
                      if Path(k).suffix.lower() in SOUND_EXTENSIONS and k != '__meta__'}
 
         if not snd_files:
-            self.log("  Aucun son trouvé.")
+            self.log(self.t('no_sounds'))
             return
 
-        self.log(f"  {len(snd_files)} son(s) trouvé(s)…")
+        self.log(self.t('sounds_found', n=len(snd_files)))
 
         for path, data in snd_files.items():
             if self.cancel_flag.is_set():
@@ -607,9 +984,9 @@ class Compressor:
                         del files[path]
                         files[new_key] = new_data
                         savings = len(data) - len(new_data)
-                        self.log(f"  {path} → {new_key} : -{self._fmt_size(savings)}")
+                        self.log(self.t('sound_saving', path=path, new_path=new_key, size=self._fmt_size(savings)))
             except Exception as e:
-                self.log(f"  Erreur son {path}: {e}")
+                self.log(self.t('sound_error', path=path, e=e))
             finally:
                 for tmp in (tmp_in, tmp_out):
                     try:
@@ -633,18 +1010,17 @@ class Compressor:
         pm_models = [p for p in all_mdls if p.startswith('models/player/')]
 
         if not pm_models and all_mdls:
-            self.log("  Lua : aucun .mdl dans models/player/, "
-                     "utilisation des modèles trouvés ailleurs dans models/")
+            self.log(self.t('lua_no_models_player'))
             pm_models = all_mdls
 
         if not pm_models:
-            self.log("  Lua : aucun .mdl trouvé dans models/ – ignoré")
+            self.log(self.t('lua_no_models'))
             return
 
         for p in pm_models:
-            self.log(f"  Lua : modèle détecté → {p}")
+            self.log(self.t('lua_model_detected', path=p))
 
-        self.log(f"  Lua : {len(pm_models)} modèle(s) trouvé(s)")
+        self.log(self.t('lua_models_found', n=len(pm_models)))
 
         # 2. Trouver les c_hands encore présents dans les fichiers
         chand_mdls = [
@@ -709,13 +1085,38 @@ class Compressor:
 
         if existing_path:
             files[existing_path] = lua_bytes
-            self.log(f"  Lua mis à jour : {existing_path}")
+            self.log(self.t('lua_updated', path=existing_path))
         else:
             new_path = f'lua/autorun/sh_{safe_stem}_pm.lua'
             files[new_path] = lua_bytes
-            self.log(f"  Lua créé : {new_path}")
+            self.log(self.t('lua_created', path=new_path))
 
     # ── Écriture ─────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _resolve_output_path(output: Path, fmt: str) -> Path:
+        if fmt == 'gma':
+            return output if output.suffix == '.gma' else output.with_suffix('.gma')
+        if fmt == 'zip':
+            return output if output.suffix == '.zip' else output.with_suffix('.zip')
+        return output
+
+    def _backup_existing(self, output: Path, fmt: str) -> None:
+        target = self._resolve_output_path(output, fmt)
+        if not target.exists():
+            return
+
+        timestamp = time.strftime('%Y%m%d_%H%M%S')
+        try:
+            if target.is_dir():
+                backup_path = target.parent / f"{target.name}_backup_{timestamp}"
+                shutil.copytree(target, backup_path)
+            else:
+                backup_path = target.with_name(f"{target.stem}_backup_{timestamp}{target.suffix}")
+                shutil.copy2(target, backup_path)
+            self.log(self.t('backup_created', path=backup_path))
+        except Exception as e:
+            self.log(self.t('backup_failed', e=e))
 
     def _write_output(self, files: dict, src: Path) -> None:
         output  = Path(self.opts['output'])
@@ -730,13 +1131,25 @@ class Compressor:
                 pass
         out_files = {k: v for k, v in files.items() if k != '__meta__'}
 
+        if self.opts.get('dry_run'):
+            if fmt == 'folder':
+                self.log(self.t('dry_run_would_write_folder', path=output, n=len(out_files)))
+            elif fmt == 'gma':
+                self.log(self.t('dry_run_would_write_gma', path=self._resolve_output_path(output, fmt)))
+            elif fmt == 'zip':
+                self.log(self.t('dry_run_would_write_zip', path=self._resolve_output_path(output, fmt)))
+            return
+
+        if self.opts.get('backup_original'):
+            self._backup_existing(output, fmt)
+
         if fmt == 'folder':
             output.mkdir(parents=True, exist_ok=True)
             for path, data in out_files.items():
                 dest = output / path
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(data)
-            self.log(f"  Dossier : {output}/")
+            self.log(self.t('write_folder', path=output))
 
         elif fmt == 'gma':
             gma = GMAFile()
@@ -755,20 +1168,90 @@ class Compressor:
                         pass
             # Le format GMA utilise des forward slashes même sur Windows
             gma.files = out_files
-            out_path = output if output.suffix == '.gma' else output.with_suffix('.gma')
+            out_path = self._resolve_output_path(output, fmt)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             gma.save(str(out_path))
-            self.log(f"  GMA : {out_path}")
+            self.log(self.t('write_gma', path=out_path))
 
         elif fmt == 'zip':
-            out_path = output if output.suffix == '.zip' else output.with_suffix('.zip')
+            out_path = self._resolve_output_path(output, fmt)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(str(out_path), 'w',
                                  zipfile.ZIP_DEFLATED,
                                  compresslevel=zip_lvl) as zf:
                 for path, data in out_files.items():
                     zf.writestr(path, data)
-            self.log(f"  ZIP : {out_path}")
+            self.log(self.t('write_zip', path=out_path))
+
+    # ── Mode batch ───────────────────────────────────────────────────────────
+
+    def _run_batch(self) -> None:
+        src = Path(self.opts['source'])
+
+        addons: list[tuple[str, Path]] = []
+        if src.is_dir():
+            for item in sorted(src.iterdir()):
+                if item.is_dir():
+                    addons.append(('folder', item))
+                elif item.suffix.lower() == '.gma':
+                    addons.append(('gma', item))
+
+        if not addons:
+            self.log(self.t('batch_none'))
+            return
+
+        self.log(self.t('batch_found', n=len(addons), path=src))
+        self.log("")
+
+        output_root = Path(self.opts['output'])
+        fmt = self.opts.get('output_format', 'folder')
+        n = len(addons)
+        results: list[tuple[str, int, float]] = []
+
+        for i, (stype, path) in enumerate(addons, 1):
+            if self.cancel_flag.is_set():
+                break
+
+            name = path.stem
+            self.log(self.t('batch_processing', i=i, n=n, name=name))
+
+            sub_opts = dict(self.opts)
+            sub_opts['source'] = str(path)
+            sub_opts['source_type'] = stype
+            sub_opts['batch'] = False
+            if fmt == 'folder':
+                sub_opts['output'] = str(output_root / name)
+            else:
+                ext = '.gma' if fmt == 'gma' else '.zip'
+                sub_opts['output'] = str(output_root / (name + ext))
+
+            def progress_wrap(v, i=i):
+                self.set_progress((i - 1 + v / 100) / n * 100)
+
+            sub = Compressor(
+                sub_opts,
+                log_fn=self.log,
+                progress_fn=progress_wrap,
+                status_fn=self.set_status,
+                current_file_fn=self.set_current_file,
+            )
+            sub.run()
+            if sub.final_size is not None:
+                results.append((name, sub.final_size, sub.reduction or 0.0))
+            self.log("")
+
+        self.set_progress(100)
+        self.set_current_file("")
+
+        if results:
+            self.log(self.t('batch_summary_header'))
+            for name, size, reduction in results:
+                self.log(self.t('batch_summary_line', name=name,
+                                 size=self._fmt_size(size), pct=f"{reduction:.1f}"))
+            self.log("")
+
+        self.log(self.t('batch_done', n=len(results)))
+        self.set_status(self.t('status_done'))
 
     # ── Utilitaires ──────────────────────────────────────────────────────────
 
@@ -783,37 +1266,42 @@ class Compressor:
 
 # ─── Interface graphique ──────────────────────────────────────────────────────
 
-class App:
+# Palettes de thème : Catppuccin Mocha (sombre) / Catppuccin Latte (clair)
+THEMES = {
+    'dark': {
+        'BG': '#1e1e2e', 'FG': '#cdd6f4', 'ACCENT': '#89b4fa', 'SUB': '#6c7086',
+        'SURFACE': '#313244', 'GREEN': '#a6e3a1', 'RED': '#f38ba8', 'YELLOW': '#f9e2af',
+        'LOG_BG': '#11111b', 'ACCENT_ACTIVE': '#74c7ec', 'BTN_ACTIVE': '#45475a',
+    },
+    'light': {
+        'BG': '#eff1f5', 'FG': '#4c4f69', 'ACCENT': '#1e66f5', 'SUB': '#8c8fa1',
+        'SURFACE': '#ccd0da', 'GREEN': '#40a02b', 'RED': '#d20f39', 'YELLOW': '#df8e1d',
+        'LOG_BG': '#e6e9ef', 'ACCENT_ACTIVE': '#7287fd', 'BTN_ACTIVE': '#bcc0cc',
+    },
+}
 
-    # Palette Catppuccin Mocha
-    BG      = '#1e1e2e'
-    FG      = '#cdd6f4'
-    ACCENT  = '#89b4fa'
-    SUB     = '#6c7086'
-    SURFACE = '#313244'
-    GREEN   = '#a6e3a1'
-    RED     = '#f38ba8'
-    YELLOW  = '#f9e2af'
+
+class App:
 
     # Profils rapides : ajustent automatiquement les options ci-dessous
     PRESETS: dict[str, dict | None] = {
-        "Personnalisé": None,
-        "Équilibré (recommandé)": {
+        'custom': None,
+        'balanced': {
             'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
             'max_res': '1024', 'quality': 85, 'compress_sounds': False,
             'sound_quality': '128k', 'zip_level': 6,
         },
-        "Qualité maximale": {
+        'quality': {
             'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
-            'max_res': 'Aucune limite', 'quality': 100, 'compress_sounds': False,
+            'max_res': 'none', 'quality': 100, 'compress_sounds': False,
             'sound_quality': '320k', 'zip_level': 4,
         },
-        "Taille minimale": {
+        'minimal': {
             'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
             'max_res': '512', 'quality': 60, 'compress_sounds': True,
             'sound_quality': '96k', 'zip_level': 9,
         },
-        "Partage rapide (Discord…)": {
+        'share': {
             'remove_chands': True, 'remove_unused': True, 'compress_textures': True,
             'max_res': '256', 'quality': 50, 'compress_sounds': True,
             'sound_quality': '64k', 'zip_level': 9,
@@ -821,9 +1309,13 @@ class App:
     }
 
     def __init__(self):
-        self.root = tk.Tk()
+        self.lang = 'fr'
+        self.theme_name = 'dark'
+        self._apply_palette()
+
+        self.root = TkinterDnD.Tk() if DND_AVAILABLE else tk.Tk()
         self.root.title(f"Compressez PM GMod  v{VERSION}")
-        self.root.geometry("820x780")
+        self.root.geometry("820x820")
         self.root.configure(bg=self.BG)
         self.root.resizable(True, True)
         self.root.minsize(700, 640)
@@ -834,6 +1326,19 @@ class App:
         self._setup_styles()
         self._build_ui()
         self._log_header()
+
+    # ── Internationalisation / thème ──────────────────────────────────────────
+
+    def t(self, key: str, **kwargs) -> str:
+        return t(key, self.lang, **kwargs)
+
+    def _apply_palette(self):
+        palette = THEMES[self.theme_name]
+        for k, v in palette.items():
+            setattr(self, k, v)
+
+    def _profile_label(self, pid: str) -> str:
+        return self.t(f'profile_{pid}')
 
     # ── Styles ───────────────────────────────────────────────────────────────
 
@@ -865,8 +1370,8 @@ class App:
         s.configure('TNotebook.Tab',   background=self.SURFACE, foreground=self.FG,
                     padding=(12, 5), font=('Segoe UI', 9))
 
-        s.map('Accent.TButton',  background=[('active', '#74c7ec')])
-        s.map('TButton',         background=[('active', '#45475a')])
+        s.map('Accent.TButton',  background=[('active', self.ACCENT_ACTIVE)])
+        s.map('TButton',         background=[('active', self.BTN_ACTIVE)])
         s.map('TCheckbutton',    background=[('active', self.BG)])
         s.map('TRadiobutton',    background=[('active', self.BG)])
         s.map('TCombobox',       fieldbackground=[('readonly', self.SURFACE)])
@@ -886,6 +1391,13 @@ class App:
                  bg=self.SURFACE, fg=self.SUB,
                  font=('Segoe UI', 9)).pack(side='left')
 
+        theme_key = 'btn_theme_light' if self.theme_name == 'dark' else 'btn_theme_dark'
+        ttk.Button(hdr, text=self.t(theme_key), command=self._toggle_theme,
+                   width=14).pack(side='right', padx=(0, 14))
+        lang_text = "English" if self.lang == 'fr' else "Français"
+        ttk.Button(hdr, text=lang_text, command=self._toggle_language,
+                   width=10).pack(side='right', padx=(0, 6))
+
         # Corps principal avec scroll
         main = ttk.Frame(self.root, padding=(10, 8, 10, 10))
         main.pack(fill='both', expand=True)
@@ -897,39 +1409,48 @@ class App:
         self._build_buttons(main)
 
     def _build_io_section(self, parent):
-        frm = ttk.LabelFrame(parent, text=" Entrée / Sortie ", padding=8)
+        frm = ttk.LabelFrame(parent, text=self.t('io_section'), padding=8)
         frm.pack(fill='x', pady=(0, 6))
 
         # Source
         r = ttk.Frame(frm)
         r.pack(fill='x', pady=2)
-        ttk.Label(r, text="Source :", width=9).pack(side='left')
+        ttk.Label(r, text=self.t('label_source'), width=9).pack(side='left')
         self.source_var = tk.StringVar()
-        ttk.Entry(r, textvariable=self.source_var).pack(side='left', fill='x', expand=True, padx=(0, 4))
-        ttk.Button(r, text="Parcourir", command=self._browse_source, width=10).pack(side='right')
+        src_entry = ttk.Entry(r, textvariable=self.source_var)
+        src_entry.pack(side='left', fill='x', expand=True, padx=(0, 4))
+        ttk.Button(r, text=self.t('btn_browse'), command=self._browse_source, width=10).pack(side='right')
+
+        if DND_AVAILABLE:
+            src_entry.drop_target_register(DND_FILES)
+            src_entry.dnd_bind('<<Drop>>', self._on_drop_source)
 
         # Output
         r2 = ttk.Frame(frm)
         r2.pack(fill='x', pady=2)
-        ttk.Label(r2, text="Sortie :", width=9).pack(side='left')
+        ttk.Label(r2, text=self.t('label_output'), width=9).pack(side='left')
         self.output_var = tk.StringVar()
         ttk.Entry(r2, textvariable=self.output_var).pack(side='left', fill='x', expand=True, padx=(0, 4))
-        ttk.Button(r2, text="Parcourir", command=self._browse_output, width=10).pack(side='right')
+        ttk.Button(r2, text=self.t('btn_browse'), command=self._browse_output, width=10).pack(side='right')
 
         # Types
         types_row = ttk.Frame(frm)
         types_row.pack(fill='x', pady=(5, 0))
 
-        ttk.Label(types_row, text="Type source :").pack(side='left')
+        ttk.Label(types_row, text=self.t('label_source_type')).pack(side='left')
         self.src_type = tk.StringVar(value='folder')
-        ttk.Radiobutton(types_row, text="Dossier",      variable=self.src_type, value='folder').pack(side='left', padx=(4, 10))
-        ttk.Radiobutton(types_row, text="Fichier .gma", variable=self.src_type, value='gma').pack(side='left', padx=(0, 20))
+        ttk.Radiobutton(types_row, text=self.t('radio_folder'),   variable=self.src_type, value='folder').pack(side='left', padx=(4, 10))
+        ttk.Radiobutton(types_row, text=self.t('radio_gma_file'), variable=self.src_type, value='gma').pack(side='left', padx=(0, 20))
 
-        ttk.Label(types_row, text="Format sortie :").pack(side='left')
+        ttk.Label(types_row, text=self.t('label_output_format')).pack(side='left')
         self.out_fmt = tk.StringVar(value='folder')
-        ttk.Radiobutton(types_row, text="Dossier", variable=self.out_fmt, value='folder').pack(side='left', padx=(4, 8))
-        ttk.Radiobutton(types_row, text=".gma",    variable=self.out_fmt, value='gma').pack(side='left', padx=(0, 8))
-        ttk.Radiobutton(types_row, text=".zip",    variable=self.out_fmt, value='zip').pack(side='left')
+        ttk.Radiobutton(types_row, text=self.t('radio_folder'), variable=self.out_fmt, value='folder').pack(side='left', padx=(4, 8))
+        ttk.Radiobutton(types_row, text=".gma",                 variable=self.out_fmt, value='gma').pack(side='left', padx=(0, 8))
+        ttk.Radiobutton(types_row, text=".zip",                 variable=self.out_fmt, value='zip').pack(side='left')
+
+        if DND_AVAILABLE:
+            ttk.Label(frm, text=self.t('drop_hint'),
+                      foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w')
 
         # Statistiques de la source (mises à jour après sélection)
         self.stats_var = tk.StringVar(value="")
@@ -940,13 +1461,14 @@ class App:
         # ── Profil rapide ───────────────────────────────────────────────────
         profile_frm = ttk.Frame(parent)
         profile_frm.pack(fill='x', pady=(0, 6))
-        ttk.Label(profile_frm, text="Profil rapide :").pack(side='left')
-        self.profile_var = tk.StringVar(value=next(iter(self.PRESETS)))
+        ttk.Label(profile_frm, text=self.t('label_profile')).pack(side='left')
+        self._profile_label_to_id = {self._profile_label(pid): pid for pid in self.PRESETS}
+        self.profile_var = tk.StringVar(value=self._profile_label('custom'))
         profile_combo = ttk.Combobox(profile_frm, textvariable=self.profile_var, width=26,
-                                      values=list(self.PRESETS.keys()), state='readonly')
+                                      values=list(self._profile_label_to_id.keys()), state='readonly')
         profile_combo.pack(side='left', padx=4)
         profile_combo.bind('<<ComboboxSelected>>', self._apply_profile)
-        ttk.Label(profile_frm, text="  Ajuste automatiquement les réglages ci-dessous",
+        ttk.Label(profile_frm, text=self.t('profile_hint'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(side='left')
 
         # ── Onglets Général / Avancé ────────────────────────────────────────
@@ -955,8 +1477,8 @@ class App:
 
         general_tab  = ttk.Frame(notebook, padding=8)
         advanced_tab = ttk.Frame(notebook, padding=8)
-        notebook.add(general_tab,  text=" Général ")
-        notebook.add(advanced_tab, text=" Avancé ")
+        notebook.add(general_tab,  text=self.t('tab_general'))
+        notebook.add(advanced_tab, text=self.t('tab_advanced'))
 
         # ════════════════════ Onglet Général ════════════════════
         left  = ttk.Frame(general_tab)
@@ -966,21 +1488,26 @@ class App:
 
         # C-Hands
         self.rem_chands = tk.BooleanVar(value=True)
-        ttk.Checkbutton(left, text="Supprimer les C-Hands",
+        ttk.Checkbutton(left, text=self.t('chk_chands'),
                         variable=self.rem_chands).pack(anchor='w')
-        ttk.Label(left, text="  Retire les bras à la 1ʳᵉ personne (c_arms, c_*)",
+        ttk.Label(left, text=self.t('desc_chands'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
 
         # Fichiers inutiles
         self.rem_unused = tk.BooleanVar(value=True)
-        ttk.Checkbutton(left, text="Supprimer les fichiers inutiles",
+        ttk.Checkbutton(left, text=self.t('chk_unused'),
                         variable=self.rem_unused).pack(anchor='w')
-        ttk.Label(left, text="  .txt, .md, .pdf, .psd, .log…",
+        ttk.Label(left, text=self.t('desc_unused'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        # Vérification des matériaux
+        self.check_materials = tk.BooleanVar(value=True)
+        ttk.Checkbutton(left, text=self.t('chk_check_materials'),
+                        variable=self.check_materials).pack(anchor='w', pady=(0, 5))
 
         # Textures
         self.comp_tex = tk.BooleanVar(value=True)
-        ttk.Checkbutton(right, text="Optimiser les textures",
+        ttk.Checkbutton(right, text=self.t('chk_textures'),
                         variable=self.comp_tex,
                         command=self._toggle_tex).pack(anchor='w')
 
@@ -989,15 +1516,15 @@ class App:
 
         r1 = ttk.Frame(self.tex_sub)
         r1.pack(anchor='w', pady=1)
-        ttk.Label(r1, text="Résolution max :").pack(side='left')
+        ttk.Label(r1, text=self.t('label_max_res')).pack(side='left')
         self.max_res = tk.StringVar(value='1024')
         ttk.Combobox(r1, textvariable=self.max_res, width=14,
-                     values=['256', '512', '1024', '2048', 'Aucune limite'],
+                     values=['256', '512', '1024', '2048', self.t('no_limit')],
                      state='readonly').pack(side='left', padx=4)
 
         r2 = ttk.Frame(self.tex_sub)
         r2.pack(anchor='w', pady=1)
-        ttk.Label(r2, text="Qualité :").pack(side='left')
+        ttk.Label(r2, text=self.t('label_quality')).pack(side='left')
         self.tex_qual = tk.IntVar(value=85)
         ttk.Scale(r2, from_=10, to=100, variable=self.tex_qual,
                   orient='h', length=110).pack(side='left', padx=4)
@@ -1008,42 +1535,44 @@ class App:
 
         if not PIL_AVAILABLE and not VTFLIB_AVAILABLE:
             ttk.Label(self.tex_sub,
-                      text="⚠  pip install Pillow  pour les images non-VTF",
+                      text=self.t('pillow_hint'),
                       foreground=self.YELLOW, font=('Segoe UI', 8)).pack(anchor='w', pady=(2, 0))
 
         # Génération Lua
         ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(10, 4))
 
         self.gen_lua = tk.BooleanVar(value=True)
-        ttk.Checkbutton(right, text="Générer le fichier Lua PM",
+        ttk.Checkbutton(right, text=self.t('chk_lua'),
                         variable=self.gen_lua,
                         command=self._toggle_lua).pack(anchor='w')
-        ttk.Label(right, text="  Crée/met à jour lua/autorun/sh_*_pm.lua",
+        ttk.Label(right, text=self.t('desc_lua'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 3))
 
         self.lua_sub = ttk.Frame(right)
         self.lua_sub.pack(anchor='w', padx=(16, 0))
 
         self.lua_chands = tk.BooleanVar(value=True)
-        ttk.Checkbutton(self.lua_sub, text="Inclure les C-Hands dans le Lua",
+        ttk.Checkbutton(self.lua_sub, text=self.t('chk_lua_chands'),
                         variable=self.lua_chands).pack(anchor='w')
         ttk.Label(self.lua_sub,
-                  text="  Ajoute le hook PlayerSetHandsModel si\n  les c_arms sont présents",
+                  text=self.t('desc_lua_chands'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w')
 
         # ════════════════════ Onglet Avancé ════════════════════
-        aleft  = ttk.Frame(advanced_tab)
+        row1 = ttk.Frame(advanced_tab)
+        row1.pack(fill='x')
+        aleft  = ttk.Frame(row1)
         aleft.pack(side='left', fill='both', expand=True)
-        aright = ttk.Frame(advanced_tab)
+        aright = ttk.Frame(row1)
         aright.pack(side='left', fill='both', expand=True, padx=(12, 0))
 
         # Sons
         self.comp_snd = tk.BooleanVar(value=False)
-        ttk.Checkbutton(aleft, text="Compresser les sons",
+        ttk.Checkbutton(aleft, text=self.t('chk_sounds'),
                         variable=self.comp_snd,
                         command=self._toggle_snd).pack(anchor='w')
-        snd_status = ("✓ ffmpeg détecté" if FFMPEG_AVAILABLE
-                      else "⚠  ffmpeg introuvable dans le PATH")
+        snd_status = (self.t('ffmpeg_ok') if FFMPEG_AVAILABLE
+                      else self.t('ffmpeg_missing_lbl'))
         snd_color = self.GREEN if FFMPEG_AVAILABLE else self.YELLOW
         ttk.Label(aleft, text=f"  {snd_status}",
                   foreground=snd_color, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
@@ -1053,47 +1582,91 @@ class App:
 
         rs = ttk.Frame(self.snd_sub)
         rs.pack(anchor='w')
-        ttk.Label(rs, text="Bitrate :").pack(side='left')
+        ttk.Label(rs, text=self.t('label_bitrate')).pack(side='left')
         self.snd_qual = tk.StringVar(value='128k')
         ttk.Combobox(rs, textvariable=self.snd_qual, width=8,
                      values=['64k', '96k', '128k', '192k', '320k'],
                      state='readonly').pack(side='left', padx=4)
 
         # Niveau ZIP
-        ttk.Label(aleft, text="Niveau de compression ZIP :",
+        ttk.Label(aleft, text=self.t('label_zip_level'),
                   foreground=self.FG).pack(anchor='w', pady=(12, 2))
         zr = ttk.Frame(aleft)
         zr.pack(anchor='w')
-        ttk.Label(zr, text="Rapide").pack(side='left')
+        ttk.Label(zr, text=self.t('zip_fast')).pack(side='left')
         self.zip_lvl = tk.IntVar(value=6)
         ttk.Scale(zr, from_=1, to=9, variable=self.zip_lvl,
                   orient='h', length=100).pack(side='left', padx=4)
-        ttk.Label(zr, text="Max").pack(side='left')
+        ttk.Label(zr, text=self.t('zip_max')).pack(side='left')
 
         # Infos dépendances (côté droit de l'onglet avancé)
-        ttk.Label(aright, text="Bibliothèques détectées :",
+        ttk.Label(aright, text=self.t('libs_detected'),
                   font=('Segoe UI', 9, 'bold')).pack(anchor='w')
         for label, ok in (
-            ("Pillow (.png/.jpg/.tga)", PIL_AVAILABLE),
-            ("vtflib (.vtf natif)",     VTFLIB_AVAILABLE),
-            ("ffmpeg (sons)",           FFMPEG_AVAILABLE),
+            (self.t('lib_pillow'), PIL_AVAILABLE),
+            (self.t('lib_vtflib'), VTFLIB_AVAILABLE),
+            (self.t('lib_ffmpeg'), FFMPEG_AVAILABLE),
         ):
             mark  = "✓" if ok else "✗"
             color = self.GREEN if ok else self.SUB
             ttk.Label(aright, text=f"  {mark}  {label}",
                       foreground=color, font=('Segoe UI', 8)).pack(anchor='w')
         ttk.Label(aright,
-                  text="\nSans vtflib, les .vtf sont réduits par\n"
-                       "troncature de mipmaps (résolution\n"
-                       "max respectée, sans dépendance).",
+                  text=self.t('vtf_note'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(6, 0))
+
+        # ── Sécurité / modes spéciaux ────────────────────────────────────────
+        ttk.Separator(advanced_tab, orient='horizontal').pack(fill='x', pady=8)
+
+        row2 = ttk.Frame(advanced_tab)
+        row2.pack(fill='x')
+        a2left  = ttk.Frame(row2)
+        a2left.pack(side='left', fill='both', expand=True)
+        a2right = ttk.Frame(row2)
+        a2right.pack(side='left', fill='both', expand=True, padx=(12, 0))
+
+        # Mode aperçu (dry-run)
+        self.dry_run = tk.BooleanVar(value=False)
+        ttk.Checkbutton(a2left, text=self.t('chk_dry_run'),
+                        variable=self.dry_run).pack(anchor='w')
+        ttk.Label(a2left, text=self.t('desc_dry_run'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        # Sauvegarde de l'original
+        self.backup = tk.BooleanVar(value=False)
+        ttk.Checkbutton(a2left, text=self.t('chk_backup'),
+                        variable=self.backup).pack(anchor='w')
+        ttk.Label(a2left, text=self.t('desc_backup'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        # Taille cible
+        self.target_size_enabled = tk.BooleanVar(value=False)
+        ts_row = ttk.Frame(a2right)
+        ts_row.pack(anchor='w')
+        ttk.Checkbutton(ts_row, text=self.t('chk_target_size'),
+                        variable=self.target_size_enabled,
+                        command=self._toggle_target_size).pack(side='left')
+        self.target_size_mb = tk.StringVar(value='10')
+        self.target_size_entry = ttk.Entry(ts_row, textvariable=self.target_size_mb, width=6)
+        self.target_size_entry.pack(side='left', padx=4)
+        ttk.Label(ts_row, text=self.t('label_mb')).pack(side='left')
+        ttk.Label(a2right, text=self.t('desc_target_size'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        # Mode batch
+        self.batch = tk.BooleanVar(value=False)
+        ttk.Checkbutton(a2right, text=self.t('chk_batch'),
+                        variable=self.batch).pack(anchor='w')
+        ttk.Label(a2right, text=self.t('desc_batch'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
 
         self._toggle_tex()
         self._toggle_snd()
         self._toggle_lua()
+        self._toggle_target_size()
 
     def _build_progress_section(self, parent):
-        frm = ttk.LabelFrame(parent, text=" Progression ", padding=8)
+        frm = ttk.LabelFrame(parent, text=self.t('progress_section'), padding=8)
         frm.pack(fill='x', pady=(0, 6))
 
         self.prog_var = tk.DoubleVar(value=0)
@@ -1102,7 +1675,7 @@ class App:
         status_row = ttk.Frame(frm)
         status_row.pack(fill='x', pady=(3, 0))
 
-        self.status_var = tk.StringVar(value="Prêt")
+        self.status_var = tk.StringVar(value=self.t('status_ready'))
         ttk.Label(status_row, textvariable=self.status_var,
                   foreground=self.SUB).pack(side='left')
 
@@ -1111,12 +1684,12 @@ class App:
                   foreground=self.SUB, font=('Consolas', 8)).pack(side='right')
 
     def _build_log_section(self, parent):
-        frm = ttk.LabelFrame(parent, text=" Journal ", padding=8)
+        frm = ttk.LabelFrame(parent, text=self.t('log_section'), padding=8)
         frm.pack(fill='both', expand=True, pady=(0, 8))
 
         self.log_box = scrolledtext.ScrolledText(
             frm, height=9,
-            bg='#11111b', fg=self.FG,
+            bg=self.LOG_BG, fg=self.FG,
             insertbackground=self.FG,
             font=('Consolas', 9),
             state='disabled',
@@ -1136,18 +1709,18 @@ class App:
         row = ttk.Frame(parent)
         row.pack(fill='x')
 
-        ttk.Button(row, text="Effacer journal",
+        ttk.Button(row, text=self.t('btn_clear_log'),
                    command=self._clear_log).pack(side='left')
 
-        self.open_btn = ttk.Button(row, text="Ouvrir le dossier de sortie",
+        self.open_btn = ttk.Button(row, text=self.t('btn_open_output'),
                                    command=self._open_output, state='disabled')
         self.open_btn.pack(side='left', padx=(6, 0))
 
-        self.stop_btn = ttk.Button(row, text="Annuler",
+        self.stop_btn = ttk.Button(row, text=self.t('btn_cancel'),
                                    command=self._cancel, state='disabled')
         self.stop_btn.pack(side='right', padx=(4, 0))
 
-        self.run_btn = ttk.Button(row, text="  Compresser  ",
+        self.run_btn = ttk.Button(row, text=self.t('btn_run'),
                                   command=self._start, style='Accent.TButton')
         self.run_btn.pack(side='right')
 
@@ -1175,13 +1748,15 @@ class App:
                     pass
 
     def _apply_profile(self, _event=None):
-        preset = self.PRESETS.get(self.profile_var.get())
+        pid = self._profile_label_to_id.get(self.profile_var.get())
+        preset = self.PRESETS.get(pid)
         if preset is None:
             return
         self.rem_chands.set(preset['remove_chands'])
         self.rem_unused.set(preset['remove_unused'])
         self.comp_tex.set(preset['compress_textures'])
-        self.max_res.set(preset['max_res'])
+        max_res = preset['max_res']
+        self.max_res.set(self.t('no_limit') if max_res == 'none' else max_res)
         self.tex_qual.set(preset['quality'])
         self.comp_snd.set(preset['compress_sounds'] and FFMPEG_AVAILABLE)
         self.snd_qual.set(preset['sound_quality'])
@@ -1195,14 +1770,14 @@ class App:
         if not src or not Path(src).exists():
             self.stats_var.set("")
             return
-        self.stats_var.set("Analyse de la source…")
+        self.stats_var.set(self.t('stats_analyzing'))
         threading.Thread(target=self._scan_source_thread, args=(src,), daemon=True).start()
 
     def _scan_source_thread(self, src: str):
         try:
             p = Path(src)
             if p.is_file():
-                text = f"Fichier source : {Compressor._fmt_size(p.stat().st_size)}"
+                text = self.t('stats_source_file', size=Compressor._fmt_size(p.stat().st_size))
             else:
                 count = 0
                 total = 0
@@ -1210,7 +1785,7 @@ class App:
                     if fp.is_file():
                         count += 1
                         total += fp.stat().st_size
-                text = f"Source : {count} fichier(s) — {Compressor._fmt_size(total)}"
+                text = self.t('stats_source', count=count, size=Compressor._fmt_size(total))
         except OSError:
             text = ""
         self.root.after(0, lambda: self.stats_var.set(text))
@@ -1218,11 +1793,11 @@ class App:
     def _browse_source(self):
         if self.src_type.get() == 'gma':
             path = filedialog.askopenfilename(
-                title="Sélectionner un fichier GMA",
-                filetypes=[("Fichiers GMA", "*.gma"), ("Tous les fichiers", "*.*")],
+                title=self.t('dialog_select_gma'),
+                filetypes=[(self.t('filetype_gma'), "*.gma"), (self.t('filetype_all'), "*.*")],
             )
         else:
-            path = filedialog.askdirectory(title="Sélectionner le dossier de l'addon")
+            path = filedialog.askdirectory(title=self.t('dialog_select_folder'))
         if path:
             self.source_var.set(path)
             if not self.output_var.get():
@@ -1233,18 +1808,18 @@ class App:
     def _browse_output(self):
         fmt = self.out_fmt.get()
         if fmt == 'folder':
-            path = filedialog.askdirectory(title="Dossier de sortie")
+            path = filedialog.askdirectory(title=self.t('dialog_output_folder'))
         elif fmt == 'gma':
             path = filedialog.asksaveasfilename(
-                title="Enregistrer le GMA",
+                title=self.t('dialog_save_gma'),
                 defaultextension='.gma',
-                filetypes=[("Fichiers GMA", "*.gma")],
+                filetypes=[(self.t('filetype_gma'), "*.gma")],
             )
         else:
             path = filedialog.asksaveasfilename(
-                title="Enregistrer l'archive ZIP",
+                title=self.t('dialog_save_zip'),
                 defaultextension='.zip',
-                filetypes=[("Archives ZIP", "*.zip")],
+                filetypes=[(self.t('filetype_zip'), "*.zip")],
             )
         if path:
             self.output_var.set(path)
@@ -1254,16 +1829,26 @@ class App:
         out = self.output_var.get().strip()
 
         if not src:
-            messagebox.showwarning("Source manquante",
-                                   "Veuillez sélectionner un dossier ou fichier source.")
+            messagebox.showwarning(self.t('msg_source_missing_title'),
+                                   self.t('msg_source_missing_body'))
             return
         if not out:
-            messagebox.showwarning("Sortie manquante",
-                                   "Veuillez indiquer un chemin de sortie.")
+            messagebox.showwarning(self.t('msg_output_missing_title'),
+                                   self.t('msg_output_missing_body'))
             return
         if not Path(src).exists():
-            messagebox.showerror("Source introuvable", f"Le chemin n'existe pas :\n{src}")
+            messagebox.showerror(self.t('msg_source_not_found_title'),
+                                 self.t('msg_source_not_found_body', src=src))
             return
+
+        target_size_mb = None
+        if self.target_size_enabled.get():
+            try:
+                target_size_mb = float(self.target_size_mb.get().replace(',', '.'))
+            except ValueError:
+                messagebox.showwarning(self.t('msg_invalid_target_size_title'),
+                                       self.t('msg_invalid_target_size_body'))
+                return
 
         opts = {
             'source':            src,
@@ -1280,6 +1865,12 @@ class App:
             'zip_level':         int(self.zip_lvl.get()),
             'gen_lua':           self.gen_lua.get(),
             'lua_chands':        self.lua_chands.get(),
+            'check_materials':   self.check_materials.get(),
+            'target_size_mb':    target_size_mb,
+            'dry_run':           self.dry_run.get(),
+            'backup_original':   self.backup.get(),
+            'batch':             self.batch.get(),
+            'lang':              self.lang,
         }
 
         self.run_btn.configure(state='disabled')
@@ -1310,7 +1901,7 @@ class App:
         if comp and comp.final_size is not None:
             self.open_btn.configure(state='normal')
             size = Compressor._fmt_size(comp.final_size)
-            self.stats_var.set(f"Terminé : {size}  (-{comp.reduction:.1f}%)")
+            self.stats_var.set(self.t('stats_done', size=size, pct=f"{comp.reduction:.1f}"))
 
     def _cancel(self):
         if self._compressor:
@@ -1327,7 +1918,7 @@ class App:
             else:
                 subprocess.run(['xdg-open', str(target)])
         except Exception as e:
-            messagebox.showerror("Erreur", f"Impossible d'ouvrir le dossier :\n{e}")
+            messagebox.showerror(self.t('msg_error_title'), self.t('msg_open_folder_error', e=e))
 
     def _log(self, msg: str):
         tag = 'info'
@@ -1363,7 +1954,7 @@ class App:
         self.log_box.configure(state='disabled')
 
     def _log_header(self):
-        self._log(f"Compressez PM GMod  v{VERSION}")
+        self._log(self.t('log_app_version', version=VERSION))
         libs = (
             f"PIL : {'✓' if PIL_AVAILABLE else '✗'}  |  "
             f"VTFLib : {'✓' if VTFLIB_AVAILABLE else '✗'}  |  "
@@ -1371,10 +1962,114 @@ class App:
         )
         self._log(libs)
         if not PIL_AVAILABLE:
-            self._log("→ pip install Pillow   (optimisation .png/.jpg/.tga)")
+            self._log(self.t('log_install_pillow'))
         if not VTFLIB_AVAILABLE:
-            self._log("→ pip install vtflib   (optimisation .vtf native)")
+            self._log(self.t('log_install_vtflib'))
         self._log("")
+
+    # ── Bascules thème / langue / taille cible ────────────────────────────────
+
+    def _toggle_target_size(self):
+        state = 'normal' if self.target_size_enabled.get() else 'disabled'
+        self.target_size_entry.configure(state=state)
+
+    def _toggle_theme(self):
+        self.theme_name = 'light' if self.theme_name == 'dark' else 'dark'
+        self._apply_palette()
+        self._rebuild()
+
+    def _toggle_language(self):
+        self.lang = 'en' if self.lang == 'fr' else 'fr'
+        self._rebuild()
+
+    def _collect_state(self) -> dict:
+        return {
+            'source':              self.source_var.get(),
+            'output':              self.output_var.get(),
+            'src_type':            self.src_type.get(),
+            'out_fmt':             self.out_fmt.get(),
+            'profile_id':          self._profile_label_to_id.get(self.profile_var.get(), 'custom'),
+            'rem_chands':          self.rem_chands.get(),
+            'rem_unused':          self.rem_unused.get(),
+            'check_materials':     self.check_materials.get(),
+            'comp_tex':            self.comp_tex.get(),
+            'max_res_no_limit':    not self.max_res.get().isdigit(),
+            'max_res':             self.max_res.get(),
+            'tex_qual':            self.tex_qual.get(),
+            'gen_lua':             self.gen_lua.get(),
+            'lua_chands':          self.lua_chands.get(),
+            'comp_snd':            self.comp_snd.get(),
+            'snd_qual':            self.snd_qual.get(),
+            'zip_lvl':             self.zip_lvl.get(),
+            'dry_run':             self.dry_run.get(),
+            'backup':              self.backup.get(),
+            'target_size_enabled': self.target_size_enabled.get(),
+            'target_size_mb':      self.target_size_mb.get(),
+            'batch':               self.batch.get(),
+        }
+
+    def _restore_state(self, state: dict):
+        self.source_var.set(state['source'])
+        self.output_var.set(state['output'])
+        self.src_type.set(state['src_type'])
+        self.out_fmt.set(state['out_fmt'])
+        self.profile_var.set(self._profile_label(state['profile_id']))
+        self.rem_chands.set(state['rem_chands'])
+        self.rem_unused.set(state['rem_unused'])
+        self.check_materials.set(state['check_materials'])
+        self.comp_tex.set(state['comp_tex'])
+        self.max_res.set(self.t('no_limit') if state['max_res_no_limit'] else state['max_res'])
+        self.tex_qual.set(state['tex_qual'])
+        self.gen_lua.set(state['gen_lua'])
+        self.lua_chands.set(state['lua_chands'])
+        self.comp_snd.set(state['comp_snd'])
+        self.snd_qual.set(state['snd_qual'])
+        self.zip_lvl.set(state['zip_lvl'])
+        self.dry_run.set(state['dry_run'])
+        self.backup.set(state['backup'])
+        self.target_size_enabled.set(state['target_size_enabled'])
+        self.target_size_mb.set(state['target_size_mb'])
+        self.batch.set(state['batch'])
+
+        self._toggle_tex()
+        self._toggle_snd()
+        self._toggle_lua()
+        self._toggle_target_size()
+        self._scan_source()
+
+    def _rebuild(self):
+        state = self._collect_state()
+        log_content = self.log_box.get('1.0', 'end-1c')
+
+        for child in self.root.winfo_children():
+            child.destroy()
+
+        self.root.configure(bg=self.BG)
+        self._setup_styles()
+        self._build_ui()
+        self._restore_state(state)
+
+        if log_content:
+            for line in log_content.split('\n'):
+                self._log(line)
+
+    # ── Glisser-déposer ────────────────────────────────────────────────────────
+
+    def _on_drop_source(self, event):
+        raw = event.data.strip()
+        if raw.startswith('{'):
+            path = raw[1:raw.index('}')]
+        else:
+            path = raw.split()[0]
+        path = path.strip()
+        if not path:
+            return
+        p = Path(path)
+        self.source_var.set(path)
+        self.src_type.set('gma' if p.suffix.lower() == '.gma' else 'folder')
+        if not self.output_var.get():
+            self.output_var.set(str(p.parent / (p.stem + '_compressed')))
+        self._scan_source()
 
     def run(self):
         self.root.mainloop()
@@ -1422,6 +2117,21 @@ Exemples :
                         help="Ne pas générer de fichier Lua")
     parser.add_argument('--no-lua-chands', action='store_true',
                         help="Ne pas inclure les C-Hands dans le Lua généré")
+    parser.add_argument('--no-check-materials', action='store_true',
+                        help="Ne pas vérifier les matériaux/textures manquants")
+    parser.add_argument('--target-size', type=float, default=None, metavar='MO',
+                        help="Taille cible en Mo : ajuste automatiquement "
+                             "résolution/qualité des textures pour l'atteindre")
+    parser.add_argument('--dry-run', action='store_true',
+                        help="Mode aperçu : analyse et affiche les changements "
+                             "sans rien écrire sur le disque")
+    parser.add_argument('--backup', action='store_true',
+                        help="Sauvegarder la sortie existante avant écrasement")
+    parser.add_argument('--batch', action='store_true',
+                        help="Mode batch : traite chaque sous-dossier/.gma de "
+                             "la source comme un addon distinct")
+    parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
+                        help="Langue des messages (défaut : fr)")
 
     args = parser.parse_args()
 
@@ -1440,9 +2150,15 @@ Exemples :
         'zip_level':         args.zip_level,
         'gen_lua':           not args.no_lua,
         'lua_chands':        not args.no_lua_chands,
+        'check_materials':   not args.no_check_materials,
+        'target_size_mb':    args.target_size,
+        'dry_run':           args.dry_run,
+        'backup_original':   args.backup,
+        'batch':             args.batch,
+        'lang':              args.lang,
     }
 
-    print(f"Compressez PM GMod v{VERSION} – mode CLI\n")
+    print(t('cli_header', args.lang, version=VERSION))
     Compressor(opts,
                log_fn=print,
                progress_fn=lambda v: None,

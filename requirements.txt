@@ -3,3 +3,6 @@ Pillow>=10.0.0
 
 # Optionnel : support natif des fichiers .vtf
 # vtflib>=0.1.0
+
+# Optionnel : glisser-déposer dans l'interface graphique
+# tkinterdnd2>=0.3.0
