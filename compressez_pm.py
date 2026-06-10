@@ -74,6 +74,53 @@ TEXTURE_EXTENSIONS = {'.vtf', '.png', '.jpg', '.jpeg', '.tga', '.bmp'}
 # Extensions de sons supportées
 SOUND_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.flac', '.aif', '.aiff'}
 
+# Formats d'image VTF : id -> (nom, octets/pixel ou octets/bloc 4x4, bloc compressé ?)
+VTF_FORMAT_SIZES = {
+    0:  ('RGBA8888', 4, False),
+    1:  ('ABGR8888', 4, False),
+    2:  ('RGB888', 3, False),
+    3:  ('BGR888', 3, False),
+    4:  ('RGB565', 2, False),
+    5:  ('I8', 1, False),
+    6:  ('IA88', 2, False),
+    7:  ('P8', 1, False),
+    8:  ('A8', 1, False),
+    9:  ('RGB888_BLUESCREEN', 3, False),
+    10: ('BGR888_BLUESCREEN', 3, False),
+    11: ('ARGB8888', 4, False),
+    12: ('BGRA8888', 4, False),
+    13: ('DXT1', 8, True),
+    14: ('DXT3', 16, True),
+    15: ('DXT5', 16, True),
+    16: ('BGRX8888', 4, False),
+    17: ('BGR565', 2, False),
+    18: ('BGRX5551', 2, False),
+    19: ('BGRA4444', 2, False),
+    20: ('DXT1_ONEBITALPHA', 8, True),
+    21: ('BGRA5551', 2, False),
+    22: ('UV88', 2, False),
+    23: ('UVWQ8888', 4, False),
+    24: ('RGBA16161616F', 8, False),
+    25: ('RGBA16161616', 8, False),
+    26: ('UVLX8888', 4, False),
+    27: ('R32F', 4, False),
+    28: ('RGB323232F', 12, False),
+    29: ('RGBA32323232F', 16, False),
+}
+
+
+def _vtf_format_size(fmt: int, w: int, h: int) -> int | None:
+    info = VTF_FORMAT_SIZES.get(fmt)
+    if info is None:
+        return None
+    _, unit, is_block = info
+    if is_block:
+        bw = max(1, (w + 3) // 4)
+        bh = max(1, (h + 3) // 4)
+        return bw * bh * unit
+    return w * h * unit
+
+
 
 # ─── Lecteur/Écrivain GMA ────────────────────────────────────────────────────
 
@@ -321,7 +368,15 @@ class Compressor:
             return
 
         self.log(f"  {len(tex_files)} texture(s) trouvée(s)…")
+        if max_res is None:
+            self.log("  Résolution max : aucune limite (les .vtf seront copiés tels quels)")
+        elif not VTFLIB_AVAILABLE:
+            self.log(f"  vtflib non installé : réduction des .vtf par troncature de "
+                     f"mipmaps (résolution max {max_res}px)")
+
         total = len(tex_files)
+        reduced = 0
+        unchanged_vtf = 0
 
         for i, (path, data) in enumerate(tex_files.items()):
             if self.cancel_flag.is_set():
@@ -339,26 +394,133 @@ class Compressor:
                 savings = len(data) - len(new_data)
                 self.log(f"  {path} : -{self._fmt_size(savings)}")
                 files[path] = new_data
+                reduced += 1
+            elif ext == '.vtf':
+                unchanged_vtf += 1
 
             self.set_progress(35 + (i / total) * 30)
 
+        self.log(f"  Textures réduites : {reduced}/{total}")
+        if unchanged_vtf:
+            self.log(f"  .vtf inchangés : {unchanged_vtf} "
+                     f"(déjà sous la résolution max, ou format/structure non pris en charge)")
+
     def _process_vtf(self, path: str, data: bytes, max_res, quality: int) -> bytes:
         if VTFLIB_AVAILABLE:
-            return self._process_vtf_vtflib(data, max_res, quality)
-        # Sans VTFLib on ne peut pas re-encoder le DXT ; on retourne intact
-        return data
+            try:
+                return self._process_vtf_vtflib(data, max_res, quality)
+            except Exception:
+                pass
+        # Sans VTFLib : réduction de résolution par troncature des mipmaps
+        return self._process_vtf_mipstrip(data, max_res)
 
     def _process_vtf_vtflib(self, data: bytes, max_res, quality: int) -> bytes:
+        lib = vtflib.VTFLib()
+        lib.image_load_lump(data)
+        w, h = lib.width(), lib.height()
+        if max_res and (w > max_res or h > max_res):
+            new_w = min(w, max_res)
+            new_h = min(h, max_res)
+            lib.image_resize(new_w, new_h)
+        return bytes(lib.image_save_lump())
+
+    def _process_vtf_mipstrip(self, data: bytes, max_res) -> bytes:
+        """Réduit la résolution d'un VTF en supprimant les mipmaps les plus
+        grands, sans dépendance externe. Ne touche pas aux fichiers dont la
+        structure n'est pas reconnue (cubemaps, multi-frames, etc.)."""
+        if max_res is None:
+            return data
         try:
-            lib = vtflib.VTFLib()
-            lib.image_load_lump(data)
-            w, h = lib.width(), lib.height()
-            if max_res and (w > max_res or h > max_res):
-                new_w = min(w, max_res)
-                new_h = min(h, max_res)
-                lib.image_resize(new_w, new_h)
-            return bytes(lib.image_save_lump())
-        except Exception:
+            if data[:4] != b'VTF\x00' or len(data) < 80:
+                return data
+
+            ver_maj, ver_min, header_size = struct.unpack_from('<III', data, 4)
+            if ver_maj != 7:
+                return data
+
+            width, height = struct.unpack_from('<HH', data, 16)
+            flags = struct.unpack_from('<I', data, 20)[0]
+            frames = struct.unpack_from('<H', data, 24)[0]
+            high_fmt = struct.unpack_from('<i', data, 52)[0]
+            mipmap_count = data[56]
+            low_fmt = struct.unpack_from('<i', data, 57)[0]
+            low_w, low_h = data[61], data[62]
+
+            TEXTUREFLAGS_ENVMAP = 0x4000
+            if frames != 1 or (flags & TEXTUREFLAGS_ENVMAP):
+                return data  # cubemaps / multi-frames : trop risqué
+            if width == 0 or height == 0 or mipmap_count <= 1:
+                return data
+            if max(width, height) <= max_res:
+                return data  # déjà sous la limite
+            if high_fmt not in VTF_FORMAT_SIZES:
+                return data
+
+            depth = 1
+            if (ver_maj, ver_min) >= (7, 2) and len(data) >= 65:
+                depth = struct.unpack_from('<H', data, 63)[0] or 1
+            if depth != 1:
+                return data
+
+            # Localiser le début des données haute résolution
+            if (ver_maj, ver_min) >= (7, 3):
+                if len(data) < 72:
+                    return data
+                num_res = struct.unpack_from('<I', data, 68)[0]
+                high_res_offset = None
+                for i in range(num_res):
+                    off = 72 + i * 8
+                    if off + 8 > len(data):
+                        return data
+                    tag = data[off:off + 3]
+                    if tag == b'\x30\x00\x00':
+                        high_res_offset = struct.unpack_from('<I', data, off + 4)[0]
+                if high_res_offset is None:
+                    return data
+            else:
+                low_size = 0
+                if low_fmt != -1 and low_w and low_h:
+                    low_size = _vtf_format_size(low_fmt, low_w, low_h) or 0
+                high_res_offset = header_size + low_size
+
+            if high_res_offset >= len(data):
+                return data
+
+            # Taille de chaque mip, du plus petit au plus grand (ordre de stockage)
+            mip_sizes = []
+            for m in range(mipmap_count - 1, -1, -1):
+                mw = max(1, width >> m)
+                mh = max(1, height >> m)
+                sz = _vtf_format_size(high_fmt, mw, mh)
+                if sz is None:
+                    return data
+                mip_sizes.append((m, mw, mh, sz))
+
+            total_high_res = len(data) - high_res_offset
+            if sum(s for _, _, _, s in mip_sizes) != total_high_res:
+                return data  # structure inattendue : on ne touche pas au fichier
+
+            # Trouver le plus grand mip qui respecte max_res
+            keep = 0
+            target = None
+            for m, mw, mh, sz in mip_sizes:
+                if max(mw, mh) > max_res:
+                    break
+                keep += sz
+                target = (m, mw, mh, keep)
+
+            if target is None or target[0] == 0:
+                return data  # pas de réduction utile
+
+            new_mip_level, new_w, new_h, new_high_res_size = target
+            new_mipmap_count = mipmap_count - new_mip_level
+
+            out = bytearray(data[:high_res_offset + new_high_res_size])
+            struct.pack_into('<HH', out, 16, new_w, new_h)
+            out[56] = new_mipmap_count
+            return bytes(out)
+
+        except (struct.error, IndexError):
             return data
 
     def _process_image_pil(self, path: str, data: bytes, ext: str,
@@ -433,16 +595,27 @@ class Compressor:
     def _generate_lua(self, files: dict, addon_stem: str) -> None:
         """Génère ou met à jour le fichier Lua d'enregistrement du playermodel."""
 
-        # 1. Trouver tous les .mdl dans models/player/ (hors LOD)
-        pm_models = sorted(
-            p for p in files
-            if p.startswith('models/player/') and p.endswith('.mdl')
-            and not re.search(r'_lod\d+\.mdl$', p)
-        )
+        # 1. Trouver les .mdl candidats (hors armes et LOD), de préférence
+        #    dans models/player/ ; sinon n'importe où ailleurs dans models/
+        def is_mdl(p):
+            return (p.startswith('models/') and p.endswith('.mdl')
+                    and not p.startswith('models/weapons/')
+                    and not re.search(r'_lod\d+\.mdl$', p))
+
+        all_mdls = sorted(p for p in files if is_mdl(p))
+        pm_models = [p for p in all_mdls if p.startswith('models/player/')]
+
+        if not pm_models and all_mdls:
+            self.log("  Lua : aucun .mdl dans models/player/, "
+                     "utilisation des modèles trouvés ailleurs dans models/")
+            pm_models = all_mdls
 
         if not pm_models:
-            self.log("  Lua : aucun .mdl dans models/player/ – ignoré")
+            self.log("  Lua : aucun .mdl trouvé dans models/ – ignoré")
             return
+
+        for p in pm_models:
+            self.log(f"  Lua : modèle détecté → {p}")
 
         self.log(f"  Lua : {len(pm_models)} modèle(s) trouvé(s)")
 
@@ -727,7 +900,7 @@ class App:
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
 
         # Textures
-        self.comp_tex = tk.BooleanVar(value=PIL_AVAILABLE or VTFLIB_AVAILABLE)
+        self.comp_tex = tk.BooleanVar(value=True)
         ttk.Checkbutton(left, text="Optimiser les textures",
                         variable=self.comp_tex,
                         command=self._toggle_tex).pack(anchor='w')
@@ -940,7 +1113,7 @@ class App:
             'output_format':     self.out_fmt.get(),
             'remove_chands':     self.rem_chands.get(),
             'remove_unused':     self.rem_unused.get(),
-            'compress_textures': self.comp_tex.get() and (PIL_AVAILABLE or VTFLIB_AVAILABLE),
+            'compress_textures': self.comp_tex.get(),
             'max_resolution':    self.max_res.get(),
             'texture_quality':   self.tex_qual.get(),
             'compress_sounds':   self.comp_snd.get() and FFMPEG_AVAILABLE,
