@@ -13,7 +13,7 @@ if errorlevel 1 (
 )
 
 echo [1/3] Installation des dependances...
-python -m pip install pyinstaller pillow --quiet
+python -m pip install pyinstaller pillow tkinterdnd2 --quiet
 if errorlevel 1 (
     echo ERREUR lors de l'installation des dependances.
     pause

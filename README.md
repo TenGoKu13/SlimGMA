@@ -21,7 +21,7 @@ Disponible en **interface graphique** (GUI) et en **ligne de commande** (CLI).
 | **Mode aperçu (dry-run)** | Affiche les changements sans rien écrire sur le disque |
 | **Sauvegarde de l'original** | Crée une copie horodatée de la sortie avant écrasement |
 | **Mode batch** | Traite plusieurs addons (sous-dossiers/.gma) en une seule fois |
-| **Glisser-déposer** | Déposez un dossier ou un `.gma` dans la fenêtre (GUI, nécessite `tkinterdnd2`) |
+| **Glisser-déposer** | Déposez un dossier ou un `.gma` dans la fenêtre (GUI) |
 | **Thème clair / sombre** | Bascule depuis l'en-tête de la GUI |
 | **Multilingue FR / EN** | Bascule la langue de l'interface et des messages |
 
@@ -39,8 +39,9 @@ cd compressez-pm-gmod
 pip install -r requirements.txt
 ```
 
-> **Optionnel – support VTF natif** : `pip install vtflib`  
 > **Optionnel – compression des sons** : installer [ffmpeg](https://ffmpeg.org/download.html) dans le PATH
+>
+> Les textures `.vtf` et le glisser-déposer fonctionnent directement, sans dépendance supplémentaire à installer.
 
 ---
 
@@ -98,11 +99,11 @@ source output               Chemins source et sortie
 | Bibliothèque | Utilité | Obligatoire |
 |---|---|---|
 | `Pillow` | Textures .png/.jpg/.tga | Non (recommandé) |
-| `vtflib` | Textures .vtf natif | Non |
+| `tkinterdnd2` | Glisser-déposer (GUI) | Non (inclus dans l'.exe) |
 | `ffmpeg` | Sons .mp3/.wav/.ogg | Non |
-| `tkinterdnd2` | Glisser-déposer (GUI) | Non |
 
-Sans ces dépendances, les optimisations C-Hands, fichiers inutiles et ZIP fonctionnent toujours.
+Les fichiers `.vtf` sont compressés nativement (sans dépendance).
+Sans `Pillow`/`ffmpeg`, les optimisations C-Hands, fichiers inutiles et ZIP fonctionnent toujours.
 
 ---
 

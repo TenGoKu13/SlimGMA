@@ -16,7 +16,7 @@ jobs:
           python-version: "3.11"
 
       - name: Installer les dépendances
-        run: python -m pip install pyinstaller pillow
+        run: python -m pip install pyinstaller pillow tkinterdnd2
 
       - name: Construire le .exe
         run: python -m PyInstaller --onefile --windowed --name "Compressez-PM-GMod" compressez_pm.py
