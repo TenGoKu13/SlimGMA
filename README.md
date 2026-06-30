@@ -24,6 +24,9 @@ Disponible en **interface graphique** (GUI) et en **ligne de commande** (CLI).
 | **Glisser-déposer** | Déposez un dossier ou un `.gma` dans la fenêtre (GUI) |
 | **Thème clair / sombre** | Bascule depuis l'en-tête de la GUI |
 | **Multilingue FR / EN** | Bascule la langue de l'interface et des messages |
+| **Récapitulatif de fin** | Fenêtre de résumé (avant → après, espace gagné) avec ouverture directe du dossier |
+| **À propos** | Version, licence et bibliothèques détectées depuis l'en-tête |
+| **Tolérance aux fichiers corrompus** | Une texture illisible est ignorée avec un avertissement, sans interrompre la compression |
 
 ### Formats supportés
 - **Entrée** : dossier addon ou fichier `.gma`

@@ -206,6 +206,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'texture_saving':  {'fr': "  {path} : -{size}", 'en': "  {path}: -{size}"},
     'textures_reduced':{'fr': "  Textures réduites : {reduced}/{total}", 'en': "  Textures reduced: {reduced}/{total}"},
     'vtf_unchanged':   {'fr': "  .vtf inchangés : {n} (déjà sous la résolution max, ou format/structure non pris en charge)", 'en': "  .vtf unchanged: {n} (already under max resolution, or unsupported format/structure)"},
+    'texture_error':   {'fr': "  ⚠ Texture ignorée (illisible) : {path} — {e}", 'en': "  ⚠ Texture skipped (unreadable): {path} — {e}"},
     'no_limit':        {'fr': "Aucune limite", 'en': "No limit"},
 
     # Sons
@@ -357,6 +358,20 @@ STRINGS: dict[str, dict[str, str]] = {
     'msg_open_folder_error':       {'fr': "Impossible d'ouvrir le dossier :\n{e}", 'en': "Could not open folder:\n{e}"},
     'msg_invalid_target_size_title': {'fr': "Taille cible invalide", 'en': "Invalid target size"},
     'msg_invalid_target_size_body':  {'fr': "Veuillez entrer un nombre valide pour la taille cible (Mo).", 'en': "Please enter a valid number for the target size (MB)."},
+
+    'summary_title':   {'fr': "Compression terminée 🎉", 'en': "Compression complete 🎉"},
+    'summary_body':    {'fr': "Avant :   {before}\nAprès :   {after}\nGagné :   {saved}  (-{pct}%)",
+                        'en': "Before:  {before}\nAfter:   {after}\nSaved:   {saved}  (-{pct}%)"},
+    'summary_open_q':  {'fr': "Ouvrir le dossier de sortie ?", 'en': "Open the output folder?"},
+    'summary_dry_run': {'fr': "Mode aperçu : aucun fichier n'a réellement été écrit.", 'en': "Dry-run mode: no file was actually written."},
+
+    # À propos
+    'btn_about':       {'fr': "ℹ À propos", 'en': "ℹ About"},
+    'about_title':     {'fr': "À propos", 'en': "About"},
+    'about_body':      {'fr': "Compressez PM GMod  v{version}\n\nCompresseur d'addons Playermodel pour Garry's Mod.\nRéduit la taille des textures, sons et fichiers inutiles\ntout en préservant le rendu en jeu.\n\nLicence : MIT\n\nBibliothèques détectées :\n{libs}",
+                        'en': "Compressez PM GMod  v{version}\n\nPlayermodel addon compressor for Garry's Mod.\nReduces texture, sound and junk-file size while\npreserving the in-game look.\n\nLicense: MIT\n\nDetected libraries:\n{libs}"},
+    'about_lib_yes':   {'fr': "  ✓ {lib}", 'en': "  ✓ {lib}"},
+    'about_lib_no':    {'fr': "  ✗ {lib} (absent)", 'en': "  ✗ {lib} (missing)"},
 
     'log_app_version':    {'fr': "Compressez PM GMod  v{version}", 'en': "Compressez PM GMod  v{version}"},
     'log_install_pillow': {'fr': "→ pip install Pillow   (optimisation .png/.jpg/.tga)", 'en': "→ pip install Pillow   (.png/.jpg/.tga optimization)"},
@@ -748,10 +763,17 @@ class Compressor:
             ext = Path(path).suffix.lower()
             new_data = None
 
-            if ext == '.vtf':
-                new_data = self._process_vtf(path, data, max_res, quality)
-            elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
-                new_data = self._process_image_pil(path, data, ext, max_res, quality)
+            try:
+                if ext == '.vtf':
+                    new_data = self._process_vtf(path, data, max_res, quality)
+                elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
+                    new_data = self._process_image_pil(path, data, ext, max_res, quality)
+            except Exception as e:
+                # Un fichier corrompu ou non pris en charge ne doit jamais
+                # interrompre toute la compression : on le conserve tel quel.
+                if not quiet:
+                    self.log(self.t('texture_error', path=path, e=e))
+                new_data = None
 
             if new_data and len(new_data) < len(data):
                 savings = len(data) - len(new_data)
@@ -1427,6 +1449,8 @@ class App:
         lang_text = "English" if self.lang == 'fr' else "Français"
         ttk.Button(hdr, text=lang_text, command=self._toggle_language,
                    width=10).pack(side='right', padx=(0, 6))
+        ttk.Button(hdr, text=self.t('btn_about'), command=self._show_about,
+                   width=11).pack(side='right', padx=(0, 6))
 
         tk.Frame(self.root, bg=self.ACCENT, height=2).pack(fill='x')
 
@@ -1949,10 +1973,23 @@ class App:
             after = Compressor._fmt_size(comp.final_size)
             self.stats_var.set(self.t('stats_done', before=before, after=after, pct=f"{comp.reduction:.1f}"))
             self.status_dot_lbl.configure(fg=self.GREEN)
+            self._show_summary(comp, before, after)
         elif comp and comp.cancel_flag.is_set():
             self.status_dot_lbl.configure(fg=self.YELLOW)
         else:
             self.status_dot_lbl.configure(fg=self.RED)
+
+    def _show_summary(self, comp: 'Compressor', before: str, after: str):
+        """Affiche un récapitulatif convivial à la fin d'une compression réussie."""
+        saved = Compressor._fmt_size(max(0, (comp.original_size or 0) - (comp.final_size or 0)))
+        pct = f"{comp.reduction:.1f}"
+        body = self.t('summary_body', before=before, after=after, saved=saved, pct=pct)
+        if comp.opts.get('dry_run'):
+            messagebox.showinfo(self.t('summary_title'), body + "\n\n" + self.t('summary_dry_run'))
+            return
+        if messagebox.askyesno(self.t('summary_title'),
+                               body + "\n\n" + self.t('summary_open_q')):
+            self._open_output()
 
     def _cancel(self):
         if self._compressor:
@@ -2033,6 +2070,21 @@ class App:
     def _toggle_language(self):
         self.lang = 'en' if self.lang == 'fr' else 'fr'
         self._rebuild()
+
+    def _show_about(self):
+        lib_status = [
+            (self.t('lib_pillow'), PIL_AVAILABLE),
+            (self.t('lib_vtflib'), VTFLIB_AVAILABLE),
+            (self.t('lib_ffmpeg'), FFMPEG_AVAILABLE),
+        ]
+        libs = "\n".join(
+            self.t('about_lib_yes' if ok else 'about_lib_no', lib=name)
+            for name, ok in lib_status
+        )
+        messagebox.showinfo(
+            self.t('about_title'),
+            self.t('about_body', version=VERSION, libs=libs),
+        )
 
     def _collect_state(self) -> dict:
         return {
