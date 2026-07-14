@@ -298,6 +298,28 @@ STRINGS: dict[str, dict[str, str]] = {
     'unused_tex_deleted':  {'fr': "  🗑 {n} texture(s) inutilisée(s) supprimée(s) — {size} libéré(s)", 'en': "  🗑 {n} unused texture(s) removed — {size} freed"},
     'unused_tex_no_vmt':   {'fr': "  Aucun .vmt : classement des textures inutilisées ignoré.", 'en': "  No .vmt: unused-texture check skipped."},
 
+    # Matériaux (.vmt) orphelins — non référencés par un .mdl
+    'orphan_vmt_header':   {'fr': "  ── Matériaux orphelins ──", 'en': "  ── Orphan materials ──"},
+    'orphan_vmt_item':     {'fr': "  ⚠ Orphelin (aucun .mdl) : {path} ({size})", 'en': "  ⚠ Orphan (no .mdl): {path} ({size})"},
+    'orphan_vmt_removed':  {'fr': "  🗑 Supprimé : {path} ({size})", 'en': "  🗑 Removed: {path} ({size})"},
+    'orphan_vmt_found':    {'fr': "  ⚠ {n} matériau(x) orphelin(s) — {size}", 'en': "  ⚠ {n} orphan material(s) — {size}"},
+    'orphan_vmt_deleted':  {'fr': "  🗑 {n} matériau(x) orphelin(s) supprimé(s) — {size} libéré(s)", 'en': "  🗑 {n} orphan material(s) removed — {size} freed"},
+
+    # Doublons de textures
+    'dup_header':          {'fr': "  ── Doublons de textures ──", 'en': "  ── Duplicate textures ──"},
+    'dup_group':           {'fr': "  ⧉ {n} copies identiques ({size} chacune) :", 'en': "  ⧉ {n} identical copies ({size} each):"},
+    'dup_item':            {'fr': "      • {path}", 'en': "      • {path}"},
+    'dup_none':            {'fr': "  ✓ Aucun doublon exact détecté.", 'en': "  ✓ No exact duplicate detected."},
+    'dup_summary':         {'fr': "  ⧉ {groups} groupe(s) de doublons — {size} récupérable(s) par déduplication", 'en': "  ⧉ {groups} duplicate group(s) — {size} recoverable via dedup"},
+
+    # Audit des textures
+    'audit_header':        {'fr': "  ── Audit des textures ──", 'en': "  ── Texture audit ──"},
+    'audit_oversized':     {'fr': "  ⚠ Surdimensionnée : {path} ({detail})", 'en': "  ⚠ Oversized: {path} ({detail})"},
+    'audit_uncompressed':  {'fr': "  ⚠ Non compressée : {path} (format {detail} → DXT recommandé)", 'en': "  ⚠ Uncompressed: {path} (format {detail} → DXT recommended)"},
+    'audit_npot':          {'fr': "  ⚠ Non puissance de 2 : {path} ({detail})", 'en': "  ⚠ Not power-of-two: {path} ({detail})"},
+    'audit_none':          {'fr': "  ✓ Aucun problème de texture détecté.", 'en': "  ✓ No texture issue detected."},
+    'audit_summary':       {'fr': "  ⚠ {n} avertissement(s) d'audit", 'en': "  ⚠ {n} audit warning(s)"},
+
     # Mode batch
     'batch_none':           {'fr': "✗ ERREUR : Aucun addon trouvé pour le mode batch (sous-dossiers ou .gma attendus dans la source).", 'en': "✗ ERROR: No addon found for batch mode (subfolders or .gma files expected in source)."},
     'batch_found':          {'fr': "▶ Mode batch : {n} addon(s) détecté(s) dans {path}", 'en': "▶ Batch mode: {n} addon(s) detected in {path}"},
@@ -786,6 +808,8 @@ class Compressor:
         self.original_size: int | None = None
         self.final_size: int | None = None
         self.reduction: float | None = None
+        self.analysis: dict = {}
+        self._tex_cache: dict = {}
         self.lang        = opts.get('lang', 'fr')
 
     def t(self, key: str, **kwargs) -> str:
@@ -968,14 +992,7 @@ class Compressor:
 
     @staticmethod
     def _resolve_vtf_path(ref: str) -> str:
-        ref = ref.strip().strip('"\'').replace('\\', '/').lower().lstrip('/')
-        if not ref:
-            return ''
-        if not ref.endswith('.vtf'):
-            ref += '.vtf'
-        if not ref.startswith('materials/'):
-            ref = 'materials/' + ref
-        return ref
+        return resolve_material_ref(ref)
 
     def _check_missing_textures(self, files: dict) -> None:
         vmt_files = {k: v for k, v in files.items() if k.endswith('.vmt')}
@@ -1019,28 +1036,6 @@ class Compressor:
 
     # ── Classification / rôles des textures ──────────────────────────────────
 
-    def _referenced_textures(self, files: dict) -> set:
-        """Ensemble des .vtf (chemins normalisés) référencés par au moins un .vmt."""
-        referenced = set()
-        pattern = re.compile(r'\$(\w+)"?\s+"([^"]*)"', re.IGNORECASE)
-        for path, data in files.items():
-            if not path.endswith('.vmt'):
-                continue
-            try:
-                text = data.decode('utf-8', errors='replace')
-            except Exception:
-                continue
-            for m in pattern.finditer(text):
-                if m.group(1).lower() not in VMT_TEXTURE_KEYS:
-                    continue
-                ref = m.group(2).strip()
-                if not ref or ref.lower() == 'env_cubemap':
-                    continue
-                tex_path = self._resolve_vtf_path(ref)
-                if tex_path:
-                    referenced.add(tex_path)
-        return referenced
-
     @staticmethod
     def _classify_texture_role(path: str) -> str:
         """Devine le rôle d'une texture d'après son nom de fichier."""
@@ -1059,21 +1054,23 @@ class Compressor:
         return 'role_other'
 
     def _analyze_texture_usage(self, files: dict) -> None:
-        """Classe les textures par rôle et repère/supprime les inutilisées."""
+        """Analyse complète : rôles, orphelins (.vtf/.vmt), doublons et audit.
+
+        Remplit self.analysis (consommé par le rapport HTML) et applique les
+        suppressions si l'option remove_unused_textures est active."""
         tex_files = {k: v for k, v in files.items()
                      if k != '__meta__' and Path(k).suffix.lower() in TEXTURE_EXTENSIONS}
         if not tex_files:
             self.log(self.t('classify_none'))
+            self.analysis = {}
             return
 
-        # ── Classement par rôle ──
+        # ── 1) Classement par rôle ──
         by_role: dict[str, list[str]] = {}
         for path in sorted(tex_files):
-            role = self._classify_texture_role(path)
-            by_role.setdefault(role, []).append(path)
+            by_role.setdefault(self._classify_texture_role(path), []).append(path)
 
         self.log(self.t('classify_header'))
-        # Ordre d'affichage stable et lisible.
         role_order = [r for r, _ in TEXTURE_ROLE_KEYWORDS]
         role_order += ['role_normalmap', 'role_effectmap', 'role_other']
         for role in role_order:
@@ -1084,38 +1081,90 @@ class Compressor:
             for path in items:
                 self.log(self.t('classify_item', path=path))
 
-        # ── Textures inutilisées (.vtf sans .vmt) ──
-        has_vmt = any(k.endswith('.vmt') for k in files)
-        if not has_vmt:
-            self.log(self.t('unused_tex_no_vmt'))
-            return
-
-        referenced = self._referenced_textures(files)
-        vtf_files = {k: v for k, v in tex_files.items() if k.endswith('.vtf')}
-        unused = [k for k in sorted(vtf_files) if k not in referenced]
-
-        if not unused:
-            self.log(self.t('unused_tex_none'))
-            return
-
-        unused_size = sum(len(files[k]) for k in unused)
         remove = self.opts.get('remove_unused_textures', False)
-        self.log(self.t('unused_tex_header'))
-        for path in unused:
-            size = self._fmt_size(len(files[path]))
-            if remove:
-                self.log(self.t('unused_tex_removed', path=path, size=size))
-            else:
-                self.log(self.t('unused_tex_item', path=path, size=size))
+        graph = build_dependency_graph(files)
 
-        if remove:
-            for path in unused:
-                del files[path]
-            self.log(self.t('unused_tex_deleted', n=len(unused),
-                             size=self._fmt_size(unused_size)))
+        # ── 2) Textures .vtf inutilisées ──
+        if not any(k.endswith('.vmt') for k in files):
+            self.log(self.t('unused_tex_no_vmt'))
+            orphan_vtf = []
         else:
-            self.log(self.t('unused_tex_found', n=len(unused),
-                             size=self._fmt_size(unused_size)))
+            orphan_vtf = graph['orphan_vtf']
+            if not orphan_vtf:
+                self.log(self.t('unused_tex_none'))
+            else:
+                size_total = sum(len(files[k]) for k in orphan_vtf)
+                self.log(self.t('unused_tex_header'))
+                for path in orphan_vtf:
+                    size = self._fmt_size(len(files[path]))
+                    key = 'unused_tex_removed' if remove else 'unused_tex_item'
+                    self.log(self.t(key, path=path, size=size))
+                if remove:
+                    for path in orphan_vtf:
+                        del files[path]
+                    self.log(self.t('unused_tex_deleted', n=len(orphan_vtf),
+                                     size=self._fmt_size(size_total)))
+                else:
+                    self.log(self.t('unused_tex_found', n=len(orphan_vtf),
+                                     size=self._fmt_size(size_total)))
+
+        # ── 3) Matériaux .vmt orphelins (non référencés par un .mdl) ──
+        orphan_vmt = graph['orphan_vmt']
+        if orphan_vmt:
+            size_total = sum(len(files[k]) for k in orphan_vmt if k in files)
+            self.log(self.t('orphan_vmt_header'))
+            for path in orphan_vmt:
+                if path not in files:
+                    continue
+                size = self._fmt_size(len(files[path]))
+                key = 'orphan_vmt_removed' if remove else 'orphan_vmt_item'
+                self.log(self.t(key, path=path, size=size))
+            if remove:
+                for path in orphan_vmt:
+                    files.pop(path, None)
+                self.log(self.t('orphan_vmt_deleted', n=len(orphan_vmt),
+                                 size=self._fmt_size(size_total)))
+            else:
+                self.log(self.t('orphan_vmt_found', n=len(orphan_vmt),
+                                 size=self._fmt_size(size_total)))
+
+        # ── 4) Doublons exacts ──
+        duplicates = find_duplicate_textures(files)
+        if not duplicates:
+            self.log(self.t('dup_none'))
+        else:
+            self.log(self.t('dup_header'))
+            recoverable = 0
+            for group in duplicates:
+                each = len(files[group[0]])
+                recoverable += each * (len(group) - 1)
+                self.log(self.t('dup_group', n=len(group), size=self._fmt_size(each)))
+                for path in group:
+                    self.log(self.t('dup_item', path=path))
+            self.log(self.t('dup_summary', groups=len(duplicates),
+                             size=self._fmt_size(recoverable)))
+
+        # ── 5) Audit qualité ──
+        max_res_str = self.opts.get('max_resolution', '1024')
+        max_res = int(max_res_str) if str(max_res_str).isdigit() else None
+        issues = audit_textures(files, max_res)
+        if not issues:
+            self.log(self.t('audit_none'))
+        else:
+            self.log(self.t('audit_header'))
+            for it in issues:
+                self.log(self.t(it['issue'], path=it['path'], detail=it['detail']))
+            self.log(self.t('audit_summary', n=len(issues)))
+
+        # Résultats structurés pour le rapport HTML.
+        self.analysis = {
+            'roles': {r: list(by_role.get(r, [])) for r in role_order if by_role.get(r)},
+            'orphan_vtf': list(orphan_vtf),
+            'orphan_vmt': list(orphan_vmt),
+            'duplicates': duplicates,
+            'audit': issues,
+            'removed': remove,
+        }
 
     # ── Textures ──────────────────────────────────────────────────────────────
 
@@ -1148,17 +1197,25 @@ class Compressor:
             ext = Path(path).suffix.lower()
             new_data = None
 
-            try:
-                if ext == '.vtf':
-                    new_data = self._process_vtf(path, data, max_res, quality)
-                elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
-                    new_data = self._process_image_pil(path, data, ext, max_res, quality)
-            except Exception as e:
-                # Un fichier corrompu ou non pris en charge ne doit jamais
-                # interrompre toute la compression : on le conserve tel quel.
-                if not quiet:
-                    self.log(self.t('texture_error', path=path, e=e))
-                new_data = None
+            # Cache mémoire : deux textures identiques (doublons) ou les
+            # multiples passes du mode « taille cible » ne sont traitées qu'une
+            # fois pour un jeu de paramètres donné.
+            cache_key = (hash(data), ext, max_res, quality)
+            if cache_key in self._tex_cache:
+                new_data = self._tex_cache[cache_key]
+            else:
+                try:
+                    if ext == '.vtf':
+                        new_data = self._process_vtf(path, data, max_res, quality)
+                    elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
+                        new_data = self._process_image_pil(path, data, ext, max_res, quality)
+                except Exception as e:
+                    # Un fichier corrompu ou non pris en charge ne doit jamais
+                    # interrompre toute la compression : on le conserve tel quel.
+                    if not quiet:
+                        self.log(self.t('texture_error', path=path, e=e))
+                    new_data = None
+                self._tex_cache[cache_key] = new_data
 
             if new_data and len(new_data) < len(data):
                 savings = len(data) - len(new_data)
@@ -1246,7 +1303,37 @@ class Compressor:
             new_w = min(w, max_res)
             new_h = min(h, max_res)
             lib.image_resize(new_w, new_h)
+
+        # Recompression de format : un .vtf stocké en RGBA8888/BGR888… pèse
+        # 4 à 6× un DXT équivalent, sans différence visible en jeu. On tente la
+        # conversion de façon défensive (l'API vtflib varie selon les versions).
+        if self.opts.get('convert_uncompressed', True):
+            self._try_convert_dxt(lib, data)
+
         return bytes(lib.image_save_lump())
+
+    @staticmethod
+    def _try_convert_dxt(lib, original: bytes) -> None:
+        """Convertit une texture non compressée vers DXT1/DXT5 si possible.
+
+        Best-effort : toute incompatibilité d'API laisse l'image inchangée."""
+        info = read_vtf_info(original)
+        if not info or info['format_name'] not in VTF_UNCOMPRESSED_FORMATS:
+            return
+        try:
+            fmt_enum = getattr(vtflib, 'VTFImageFormat', None)
+            convert = getattr(lib, 'image_convert', None)
+            if fmt_enum is None or convert is None:
+                return
+            # Alpha présent -> DXT5 (préserve la transparence), sinon DXT1.
+            has_alpha = bool(getattr(lib, 'image_has_alpha', lambda: True)())
+            target_name = 'IMAGE_FORMAT_DXT5' if has_alpha else 'IMAGE_FORMAT_DXT1'
+            target = getattr(fmt_enum, target_name, None)
+            if target is not None:
+                convert(target)
+        except Exception:
+            # On ne compromet jamais la compression pour un échec de conversion.
+            pass
 
     def _process_vtf_mipstrip(self, data: bytes, max_res) -> bytes:
         """Réduit la résolution d'un VTF en supprimant les mipmaps les plus
@@ -2654,6 +2741,8 @@ Exemples :
                              "la source comme un addon distinct")
     parser.add_argument('--remove-unused-textures', action='store_true',
                         help="Supprimer les textures .vtf référencées par aucun .vmt")
+    parser.add_argument('--no-convert-uncompressed', action='store_true',
+                        help="Ne pas recompresser les .vtf non compressés en DXT")
     parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
                         help="Langue des messages (défaut : fr)")
 
@@ -2676,6 +2765,7 @@ Exemples :
         'lua_chands':        not args.no_lua_chands,
         'check_materials':   not args.no_check_materials,
         'remove_unused_textures': args.remove_unused_textures,
+        'convert_uncompressed': not args.no_convert_uncompressed,
         'target_size_mb':    args.target_size,
         'dry_run':           args.dry_run,
         'backup_original':   args.backup,
