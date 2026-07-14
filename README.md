@@ -120,6 +120,25 @@ Sans `Pillow`/`ffmpeg`, les optimisations C-Hands, fichiers inutiles et ZIP fonc
 
 ---
 
+## Structure du projet
+
+Le code est organisé en package `cpm/` (le fichier `compressez_pm.py` reste le
+point d'entrée et ré-exporte l'API publique) :
+
+```
+compressez_pm.py   Point d'entrée (CLI + GUI)
+cpm/
+├── deps.py         Dépendances optionnelles (Pillow, vtflib, ffmpeg)
+├── constants.py    Constantes globales
+├── i18n.py         Traductions FR / EN
+├── gma.py          Lecteur / écrivain .gma
+├── analysis.py     Moteur d'analyse (pur, testable)
+├── report.py       Rapport HTML
+├── compressor.py   Logique de compression
+├── gui.py          Interface graphique tkinter
+└── cli.py          Point d'entrée ligne de commande
+```
+
 ## Tests
 
 ```bash
