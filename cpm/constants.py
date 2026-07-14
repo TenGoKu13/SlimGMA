@@ -1,0 +1,116 @@
+"""Constantes globales de Compressez PM GMod."""
+import os
+import sys
+from pathlib import Path
+
+
+VERSION = "1.0.0"
+
+
+def _config_path() -> Path:
+    """Chemin du fichier de préférences utilisateur (multiplateforme)."""
+    if sys.platform == 'win32':
+        base = Path(os.environ.get('APPDATA', Path.home()))
+    else:
+        base = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
+    return base / 'CompressezPMGMod' / 'config.json'
+
+
+CONFIG_PATH = _config_path()
+
+# Patterns de fichiers C-Hands (bras à la première personne)
+CHAND_PATTERNS = [
+    r"models/weapons/c_.*",
+    r"materials/models/weapons/c_.*",
+    r"models/weapons/cstrike/c_.*",
+    r"materials/models/weapons/cstrike/c_.*",
+    r"models/weapons/v_.*_c\..*",
+]
+
+# Extensions de fichiers inutiles (documentation, sources PSD, etc.)
+USELESS_EXTENSIONS = {
+    '.txt', '.md', '.pdf', '.doc', '.docx', '.nfo', '.log',
+    '.bat', '.sh', '.psd', '.xcf', '.ai', '.eps',
+}
+
+# Extensions de textures supportées
+TEXTURE_EXTENSIONS = {'.vtf', '.png', '.jpg', '.jpeg', '.tga', '.bmp'}
+
+# Extensions de sons supportées
+SOUND_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.flac', '.aif', '.aiff'}
+
+# Formats d'image VTF : id -> (nom, octets/pixel ou octets/bloc 4x4, bloc compressé ?)
+VTF_FORMAT_SIZES = {
+    0:  ('RGBA8888', 4, False),
+    1:  ('ABGR8888', 4, False),
+    2:  ('RGB888', 3, False),
+    3:  ('BGR888', 3, False),
+    4:  ('RGB565', 2, False),
+    5:  ('I8', 1, False),
+    6:  ('IA88', 2, False),
+    7:  ('P8', 1, False),
+    8:  ('A8', 1, False),
+    9:  ('RGB888_BLUESCREEN', 3, False),
+    10: ('BGR888_BLUESCREEN', 3, False),
+    11: ('ARGB8888', 4, False),
+    12: ('BGRA8888', 4, False),
+    13: ('DXT1', 8, True),
+    14: ('DXT3', 16, True),
+    15: ('DXT5', 16, True),
+    16: ('BGRX8888', 4, False),
+    17: ('BGR565', 2, False),
+    18: ('BGRX5551', 2, False),
+    19: ('BGRA4444', 2, False),
+    20: ('DXT1_ONEBITALPHA', 8, True),
+    21: ('BGRA5551', 2, False),
+    22: ('UV88', 2, False),
+    23: ('UVWQ8888', 4, False),
+    24: ('RGBA16161616F', 8, False),
+    25: ('RGBA16161616', 8, False),
+    26: ('UVLX8888', 4, False),
+    27: ('R32F', 4, False),
+    28: ('RGB323232F', 12, False),
+    29: ('RGBA32323232F', 16, False),
+}
+
+
+def _vtf_format_size(fmt: int, w: int, h: int) -> int | None:
+    info = VTF_FORMAT_SIZES.get(fmt)
+    if info is None:
+        return None
+    _, unit, is_block = info
+    if is_block:
+        bw = max(1, (w + 3) // 4)
+        bh = max(1, (h + 3) // 4)
+        return bw * bh * unit
+    return w * h * unit
+
+
+# Clés de matériaux VMT faisant référence à des fichiers .vtf
+VMT_TEXTURE_KEYS = {
+    'basetexture', 'basetexture2', 'bumpmap', 'bumpmap2', 'normalmap',
+    'normalmap2', 'envmapmask', 'detail', 'blendmodulatetexture',
+    'phongexponenttexture', 'phongwarptexture', 'lightwarptexture',
+    'selfillummask', 'ambientocclusiontexture', 'tooltexture', 'texture2',
+    'iris', 'corneatexture', 'displacementmap', 'blendmask',
+}
+
+# Rôle d'une texture déterminé par des mots-clés dans son nom de fichier.
+# L'ordre compte : les rôles les plus spécifiques doivent passer en premier.
+# Clé de rôle -> liste de mots-clés (FR/EN) recherchés dans le chemin.
+TEXTURE_ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ('role_eye_effect', ('eyeglow', 'eyeball', 'glowing_eye', 'eye_glow')),
+    ('role_eyes',       ('eye', 'iris', 'cornea', 'oeil', 'yeux', 'pupil')),
+    ('role_helmet',     ('helmet', 'casque', 'hat', 'chapeau', 'cap', 'mask', 'masque', 'hood', 'capuche')),
+    ('role_hair',       ('hair', 'cheveux', 'beard', 'barbe', 'brow', 'lash', 'sourcil')),
+    ('role_mouth',      ('mouth', 'teeth', 'tooth', 'bouche', 'dent', 'tongue', 'langue', 'lip', 'levre')),
+    ('role_head',       ('head', 'face', 'tete', 'visage', 'skin_head', 'faceskin')),
+    ('role_hands',      ('hand', 'arm', 'glove', 'main', 'bras', 'gant', 'c_arms', 'fist', 'finger')),
+    ('role_legs',       ('leg', 'foot', 'feet', 'boot', 'shoe', 'pant', 'jambe', 'pied', 'botte', 'chaussure', 'thigh')),
+    ('role_body',       ('body', 'torso', 'chest', 'corps', 'torse', 'suit', 'shirt', 'jacket', 'vest', 'cloth', 'outfit', 'skin')),
+    ('role_accessory',  ('accessor', 'bag', 'belt', 'ceinture', 'strap', 'pouch', 'badge', 'patch', 'weapon', 'gun')),
+]
+
+# Suffixes de nom indiquant une carte technique plutôt qu'un rôle visuel.
+NORMALMAP_HINTS = ('_normal', '_n', '_nrm', '_bump', '_ddn')
+EFFECTMAP_HINTS = ('_phong', '_spec', '_exp', '_gloss', '_ao', '_mask', '_illum', '_detail')
