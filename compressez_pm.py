@@ -320,6 +320,31 @@ STRINGS: dict[str, dict[str, str]] = {
     'audit_none':          {'fr': "  ✓ Aucun problème de texture détecté.", 'en': "  ✓ No texture issue detected."},
     'audit_summary':       {'fr': "  ⚠ {n} avertissement(s) d'audit", 'en': "  ⚠ {n} audit warning(s)"},
 
+    # Rapport HTML
+    'report_written':      {'fr': "▶ Rapport HTML généré : {path}", 'en': "▶ HTML report generated: {path}"},
+    'report_title':        {'fr': "Rapport d'analyse — {name}", 'en': "Analysis report — {name}"},
+    'report_subtitle':     {'fr': "Compressez PM GMod — analyse de l'addon", 'en': "Compressez PM GMod — addon analysis"},
+    'report_sum_original': {'fr': "Taille d'origine", 'en': "Original size"},
+    'report_sum_final':    {'fr': "Taille finale", 'en': "Final size"},
+    'report_sum_saved':    {'fr': "Réduction", 'en': "Reduction"},
+    'report_sum_files':    {'fr': "Fichiers", 'en': "Files"},
+    'report_sec_roles':    {'fr': "Rôle des textures", 'en': "Texture roles"},
+    'report_sec_orphans':  {'fr': "Fichiers inutilisés", 'en': "Unused files"},
+    'report_sec_dups':     {'fr': "Doublons exacts", 'en': "Exact duplicates"},
+    'report_sec_audit':    {'fr': "Audit qualité", 'en': "Quality audit"},
+    'report_col_texture':  {'fr': "Texture", 'en': "Texture"},
+    'report_col_issue':    {'fr': "Problème", 'en': "Issue"},
+    'report_col_detail':   {'fr': "Détail", 'en': "Detail"},
+    'report_removed_badge':{'fr': "supprimé(s)", 'en': "removed"},
+    'report_kept_badge':   {'fr': "conservé(s)", 'en': "kept"},
+    'report_empty':        {'fr': "Rien à signaler.", 'en': "Nothing to report."},
+    'report_audit_oversized':    {'fr': "Surdimensionnée", 'en': "Oversized"},
+    'report_audit_uncompressed': {'fr': "Non compressée", 'en': "Uncompressed"},
+    'report_audit_npot':         {'fr': "Non puissance de 2", 'en': "Not power-of-two"},
+    'report_open':         {'fr': "📄 Ouvrir le rapport", 'en': "📄 Open report"},
+    'chk_report':          {'fr': "Générer un rapport HTML", 'en': "Generate HTML report"},
+    'desc_report':         {'fr': "  Récapitulatif visuel (rôles, orphelins, audit)", 'en': "  Visual summary (roles, orphans, audit)"},
+
     # Mode batch
     'batch_none':           {'fr': "✗ ERREUR : Aucun addon trouvé pour le mode batch (sous-dossiers ou .gma attendus dans la source).", 'en': "✗ ERROR: No addon found for batch mode (subfolders or .gma files expected in source)."},
     'batch_found':          {'fr': "▶ Mode batch : {n} addon(s) détecté(s) dans {path}", 'en': "▶ Batch mode: {n} addon(s) detected in {path}"},
@@ -791,6 +816,144 @@ def audit_textures(files: dict, max_res: int | None = 1024) -> list[dict]:
     return issues
 
 
+def build_html_report(report: dict) -> str:
+    """Construit un rapport HTML autonome (thème clair/sombre) à partir d'un
+    dict `report` déjà traduit. Fonction pure et testable."""
+    import html as _html
+
+    def esc(s) -> str:
+        return _html.escape(str(s))
+
+    title = report.get('title', 'Rapport')
+    subtitle = report.get('subtitle', '')
+    s = report.get('summary', {})
+    parts: list[str] = []
+
+    # Cartes de synthèse
+    cards = [
+        (report['labels']['original'], s.get('original', '—')),
+        (report['labels']['final'],    s.get('final', '—')),
+        (report['labels']['saved'],    s.get('reduction', '—')),
+        (report['labels']['files'],    s.get('files', '—')),
+    ]
+    cards_html = ''.join(
+        f'<div class="card"><div class="k">{esc(k)}</div>'
+        f'<div class="v">{esc(v)}</div></div>' for k, v in cards)
+    parts.append(f'<div class="cards">{cards_html}</div>')
+
+    # Rôles des textures
+    roles = report.get('roles', [])
+    if roles:
+        blocks = []
+        for label, items in roles:
+            lis = ''.join(f'<li>{esc(p)}</li>' for p in items)
+            blocks.append(
+                f'<details open><summary>{esc(label)} '
+                f'<span class="badge">{len(items)}</span></summary>'
+                f'<ul class="files">{lis}</ul></details>')
+        parts.append(_section(report['labels']['sec_roles'], ''.join(blocks)))
+
+    # Orphelins
+    orphans = report.get('orphans', [])
+    if orphans:
+        badge = report['labels']['removed'] if report.get('removed') else report['labels']['kept']
+        lis = ''.join(f'<li>{esc(p)}</li>' for p in orphans)
+        body = (f'<p class="tag {"del" if report.get("removed") else "keep"}">'
+                f'{esc(badge)}</p><ul class="files">{lis}</ul>')
+        parts.append(_section(report['labels']['sec_orphans'], body))
+
+    # Doublons
+    dups = report.get('duplicates', [])
+    if dups:
+        blocks = []
+        for group in dups:
+            lis = ''.join(f'<li>{esc(p)}</li>' for p in group)
+            blocks.append(f'<details><summary>{len(group)}×</summary>'
+                          f'<ul class="files">{lis}</ul></details>')
+        parts.append(_section(report['labels']['sec_dups'], ''.join(blocks)))
+
+    # Audit
+    audit = report.get('audit', [])
+    if audit:
+        rows = ''.join(
+            f'<tr><td>{esc(a["path"])}</td><td>{esc(a["label"])}</td>'
+            f'<td>{esc(a["detail"])}</td></tr>' for a in audit)
+        lbl = report['labels']
+        table = (f'<table><thead><tr><th>{esc(lbl["col_texture"])}</th>'
+                 f'<th>{esc(lbl["col_issue"])}</th>'
+                 f'<th>{esc(lbl["col_detail"])}</th></tr></thead>'
+                 f'<tbody>{rows}</tbody></table>')
+        parts.append(_section(lbl['sec_audit'], table))
+
+    body = '\n'.join(parts) or f'<p>{esc(report["labels"]["empty"])}</p>'
+    return _HTML_TEMPLATE.format(
+        title=esc(title), subtitle=esc(subtitle), body=body)
+
+
+def _section(title: str, inner: str) -> str:
+    import html as _html
+    return (f'<section><h2>{_html.escape(title)}</h2>{inner}</section>')
+
+
+_HTML_TEMPLATE = """<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>
+  :root {{
+    --bg:#f4f6fb; --fg:#1b2430; --sub:#5b6675; --card:#ffffff;
+    --accent:#3b82f6; --border:#e2e8f0; --del:#ef4444; --keep:#10b981;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{
+      --bg:#0f141b; --fg:#e6edf3; --sub:#93a1b0; --card:#161d26;
+      --accent:#60a5fa; --border:#26313d; --del:#f87171; --keep:#34d399;
+    }}
+  }}
+  * {{ box-sizing:border-box; }}
+  body {{ margin:0; padding:32px; background:var(--bg); color:var(--fg);
+    font-family:'Segoe UI',system-ui,sans-serif; line-height:1.5; }}
+  header {{ margin-bottom:24px; }}
+  h1 {{ margin:0; font-size:22px; }}
+  .sub {{ color:var(--sub); font-size:14px; }}
+  .cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px; margin-bottom:28px; }}
+  .card {{ background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:14px 16px; }}
+  .card .k {{ color:var(--sub); font-size:12px; text-transform:uppercase;
+    letter-spacing:.04em; }}
+  .card .v {{ font-size:22px; font-weight:700; margin-top:4px; }}
+  section {{ background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:16px 20px; margin-bottom:18px; }}
+  h2 {{ margin:0 0 12px; font-size:16px; border-left:3px solid var(--accent);
+    padding-left:10px; }}
+  details {{ margin:6px 0; }}
+  summary {{ cursor:pointer; font-weight:600; }}
+  .badge {{ background:var(--accent); color:#fff; border-radius:10px;
+    padding:1px 8px; font-size:12px; margin-left:6px; }}
+  ul.files {{ margin:8px 0 8px 4px; padding-left:18px; }}
+  ul.files li {{ font-family:ui-monospace,monospace; font-size:12.5px;
+    color:var(--sub); word-break:break-all; }}
+  .tag {{ display:inline-block; padding:2px 10px; border-radius:8px;
+    font-size:12px; font-weight:700; }}
+  .tag.del {{ background:var(--del); color:#fff; }}
+  .tag.keep {{ background:var(--keep); color:#04231a; }}
+  table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+  th, td {{ text-align:left; padding:7px 8px; border-bottom:1px solid var(--border);
+    word-break:break-all; }}
+  th {{ color:var(--sub); font-weight:600; }}
+</style>
+</head>
+<body>
+  <header><h1>{title}</h1><div class="sub">{subtitle}</div></header>
+  {body}
+</body>
+</html>
+"""
+
+
 # ─── Compresseur ─────────────────────────────────────────────────────────────
 
 class Compressor:
@@ -809,6 +972,7 @@ class Compressor:
         self.final_size: int | None = None
         self.reduction: float | None = None
         self.analysis: dict = {}
+        self.report_path: str | None = None
         self._tex_cache: dict = {}
         self.lang        = opts.get('lang', 'fr')
 
@@ -927,6 +1091,8 @@ class Compressor:
                 self.log("")
                 self.log(self.t('final_size', size=self._fmt_size(final_size)))
                 self.log(self.t('final_reduction', pct=f"{reduction:.1f}"))
+                if self.opts.get('gen_report', True):
+                    self._write_html_report(files, src)
                 self.log(self.t('success'))
                 self.set_status(self.t('status_done'))
             else:
@@ -1165,6 +1331,72 @@ class Compressor:
             'audit': issues,
             'removed': remove,
         }
+
+    # ── Rapport HTML ──────────────────────────────────────────────────────────
+
+    def _build_report_dict(self, files: dict, addon_name: str) -> dict:
+        a = self.analysis or {}
+        audit_lbl = {
+            'audit_oversized':    self.t('report_audit_oversized'),
+            'audit_uncompressed': self.t('report_audit_uncompressed'),
+            'audit_npot':         self.t('report_audit_npot'),
+        }
+        roles = [(self.t(role), items) for role, items in a.get('roles', {}).items()]
+        orphans = list(a.get('orphan_vtf', [])) + list(a.get('orphan_vmt', []))
+        audit = [{'path': it['path'], 'label': audit_lbl.get(it['issue'], it['issue']),
+                  'detail': it['detail']} for it in a.get('audit', [])]
+
+        reduction = f"-{self.reduction:.1f}%" if self.reduction is not None else '—'
+        return {
+            'title': self.t('report_title', name=addon_name),
+            'subtitle': self.t('report_subtitle'),
+            'removed': a.get('removed', False),
+            'summary': {
+                'original': self._fmt_size(self.original_size or 0),
+                'final': self._fmt_size(self.final_size or 0),
+                'reduction': reduction,
+                'files': str(sum(1 for k in files if k != '__meta__')),
+            },
+            'roles': roles,
+            'orphans': orphans,
+            'duplicates': a.get('duplicates', []),
+            'audit': audit,
+            'labels': {
+                'original': self.t('report_sum_original'),
+                'final': self.t('report_sum_final'),
+                'saved': self.t('report_sum_saved'),
+                'files': self.t('report_sum_files'),
+                'sec_roles': self.t('report_sec_roles'),
+                'sec_orphans': self.t('report_sec_orphans'),
+                'sec_dups': self.t('report_sec_dups'),
+                'sec_audit': self.t('report_sec_audit'),
+                'col_texture': self.t('report_col_texture'),
+                'col_issue': self.t('report_col_issue'),
+                'col_detail': self.t('report_col_detail'),
+                'removed': self.t('report_removed_badge'),
+                'kept': self.t('report_kept_badge'),
+                'empty': self.t('report_empty'),
+            },
+        }
+
+    def _write_html_report(self, files: dict, src: Path) -> None:
+        if self.opts.get('dry_run'):
+            return
+        try:
+            out = Path(self.opts['output'])
+            fmt = self.opts.get('output_format', 'folder')
+            if fmt == 'folder':
+                out.mkdir(parents=True, exist_ok=True)
+                report_path = out / 'rapport_compression.html'
+            else:
+                stem = out.stem or 'addon'
+                report_path = out.parent / (stem + '_rapport.html')
+            html = build_html_report(self._build_report_dict(files, src.stem))
+            report_path.write_text(html, encoding='utf-8')
+            self.report_path = str(report_path)
+            self.log(self.t('report_written', path=report_path))
+        except Exception:
+            pass  # le rapport ne doit jamais faire échouer la compression
 
     # ── Textures ──────────────────────────────────────────────────────────────
 
@@ -2743,6 +2975,8 @@ Exemples :
                         help="Supprimer les textures .vtf référencées par aucun .vmt")
     parser.add_argument('--no-convert-uncompressed', action='store_true',
                         help="Ne pas recompresser les .vtf non compressés en DXT")
+    parser.add_argument('--no-report', action='store_true',
+                        help="Ne pas générer le rapport HTML d'analyse")
     parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
                         help="Langue des messages (défaut : fr)")
 
@@ -2766,6 +3000,7 @@ Exemples :
         'check_materials':   not args.no_check_materials,
         'remove_unused_textures': args.remove_unused_textures,
         'convert_uncompressed': not args.no_convert_uncompressed,
+        'gen_report':        not args.no_report,
         'target_size_mb':    args.target_size,
         'dry_run':           args.dry_run,
         'backup_original':   args.backup,

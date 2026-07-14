@@ -160,6 +160,38 @@ def test_audit_flags_npot():
 
 # ─── classification (regression) ────────────────────────────────────────────
 
+def test_build_html_report_is_self_contained():
+    report = {
+        'title': 'Test', 'subtitle': 'sub', 'removed': True,
+        'summary': {'original': '10 Mo', 'final': '4 Mo', 'reduction': '-60%', 'files': '12'},
+        'roles': [('Tête', ['materials/head.vtf'])],
+        'orphans': ['materials/x.vtf'],
+        'duplicates': [['materials/a.vtf', 'materials/b.vtf']],
+        'audit': [{'path': 'materials/big.vtf', 'label': 'Surdimensionnée', 'detail': '2048'}],
+        'labels': {k: k for k in (
+            'original final saved files sec_roles sec_orphans sec_dups sec_audit '
+            'col_texture col_issue col_detail removed kept empty').split()},
+    }
+    out = m.build_html_report(report)
+    assert '<!doctype html>' in out.lower()
+    assert 'materials/head.vtf' in out
+    assert 'http://' not in out and 'https://' not in out   # autonome, aucune ressource externe
+
+
+def test_build_html_report_escapes_paths():
+    report = {
+        'title': 'T', 'subtitle': '', 'removed': False, 'summary': {},
+        'roles': [('R', ['materials/<script>.vtf'])],
+        'orphans': [], 'duplicates': [], 'audit': [],
+        'labels': {k: k for k in (
+            'original final saved files sec_roles sec_orphans sec_dups sec_audit '
+            'col_texture col_issue col_detail removed kept empty').split()},
+    }
+    out = m.build_html_report(report)
+    assert '<script>' not in out
+    assert '&lt;script&gt;' in out
+
+
 def test_classify_roles():
     C = m.Compressor
     assert C._classify_texture_role('materials/x/head.vtf') == 'role_head'
