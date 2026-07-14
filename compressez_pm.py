@@ -148,6 +148,26 @@ VMT_TEXTURE_KEYS = {
     'iris', 'corneatexture', 'displacementmap', 'blendmask',
 }
 
+# Rôle d'une texture déterminé par des mots-clés dans son nom de fichier.
+# L'ordre compte : les rôles les plus spécifiques doivent passer en premier.
+# Clé de rôle -> liste de mots-clés (FR/EN) recherchés dans le chemin.
+TEXTURE_ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ('role_eye_effect', ('eyeglow', 'eyeball', 'glowing_eye', 'eye_glow')),
+    ('role_eyes',       ('eye', 'iris', 'cornea', 'oeil', 'yeux', 'pupil')),
+    ('role_helmet',     ('helmet', 'casque', 'hat', 'chapeau', 'cap', 'mask', 'masque', 'hood', 'capuche')),
+    ('role_hair',       ('hair', 'cheveux', 'beard', 'barbe', 'brow', 'lash', 'sourcil')),
+    ('role_mouth',      ('mouth', 'teeth', 'tooth', 'bouche', 'dent', 'tongue', 'langue', 'lip', 'levre')),
+    ('role_head',       ('head', 'face', 'tete', 'visage', 'skin_head', 'faceskin')),
+    ('role_hands',      ('hand', 'arm', 'glove', 'main', 'bras', 'gant', 'c_arms', 'fist', 'finger')),
+    ('role_legs',       ('leg', 'foot', 'feet', 'boot', 'shoe', 'pant', 'jambe', 'pied', 'botte', 'chaussure', 'thigh')),
+    ('role_body',       ('body', 'torso', 'chest', 'corps', 'torse', 'suit', 'shirt', 'jacket', 'vest', 'cloth', 'outfit', 'skin')),
+    ('role_accessory',  ('accessor', 'bag', 'belt', 'ceinture', 'strap', 'pouch', 'badge', 'patch', 'weapon', 'gun')),
+]
+
+# Suffixes de nom indiquant une carte technique plutôt qu'un rôle visuel.
+NORMALMAP_HINTS = ('_normal', '_n', '_nrm', '_bump', '_ddn')
+EFFECTMAP_HINTS = ('_phong', '_spec', '_exp', '_gloss', '_ao', '_mask', '_illum', '_detail')
+
 
 # ─── Internationalisation (FR/EN) ────────────────────────────────────────────
 
@@ -250,6 +270,34 @@ STRINGS: dict[str, dict[str, str]] = {
     'missing_textures_none':   {'fr': "  ✓ Aucune texture manquante détectée ({n} .vmt vérifié(s))", 'en': "  ✓ No missing textures detected ({n} .vmt checked)"},
     'missing_textures_found':  {'fr': "  ⚠ {n} texture(s) manquante(s) détectée(s)", 'en': "  ⚠ {n} missing texture(s) detected"},
 
+    # Classification et rôles des textures
+    'classify_header':     {'fr': "  ── Rôle des textures ──", 'en': "  ── Texture roles ──"},
+    'classify_line':       {'fr': "  {role} : {n} texture(s)", 'en': "  {role}: {n} texture(s)"},
+    'classify_item':       {'fr': "      • {path}", 'en': "      • {path}"},
+    'classify_none':       {'fr': "  Aucune texture à classer.", 'en': "  No texture to classify."},
+    'role_head':           {'fr': "Tête / Visage", 'en': "Head / Face"},
+    'role_helmet':         {'fr': "Casque / Chapeau", 'en': "Helmet / Hat"},
+    'role_hair':           {'fr': "Cheveux", 'en': "Hair"},
+    'role_eyes':           {'fr': "Yeux", 'en': "Eyes"},
+    'role_mouth':          {'fr': "Bouche / Dents", 'en': "Mouth / Teeth"},
+    'role_body':           {'fr': "Corps / Torse", 'en': "Body / Torso"},
+    'role_hands':          {'fr': "Mains / Bras", 'en': "Hands / Arms"},
+    'role_legs':           {'fr': "Jambes / Pieds", 'en': "Legs / Feet"},
+    'role_accessory':      {'fr': "Accessoires", 'en': "Accessories"},
+    'role_normalmap':      {'fr': "Cartes normales / bump", 'en': "Normal / bump maps"},
+    'role_effectmap':      {'fr': "Cartes d'effet (phong, spéculaire…)", 'en': "Effect maps (phong, specular…)"},
+    'role_eye_effect':     {'fr': "Effets (yeux brillants, œil…)", 'en': "Eye effects (glow, eyeball…)"},
+    'role_other':          {'fr': "Autre / Non classé", 'en': "Other / Unclassified"},
+
+    # Textures inutilisées
+    'unused_tex_header':   {'fr': "  ── Textures inutilisées ──", 'en': "  ── Unused textures ──"},
+    'unused_tex_item':     {'fr': "  ⚠ Inutilisée (aucun .vmt) : {path} ({size})", 'en': "  ⚠ Unused (no .vmt): {path} ({size})"},
+    'unused_tex_removed':  {'fr': "  🗑 Supprimée : {path} ({size})", 'en': "  🗑 Removed: {path} ({size})"},
+    'unused_tex_none':     {'fr': "  ✓ Aucune texture inutilisée détectée.", 'en': "  ✓ No unused texture detected."},
+    'unused_tex_found':    {'fr': "  ⚠ {n} texture(s) inutilisée(s) — {size} (activez la suppression pour les retirer)", 'en': "  ⚠ {n} unused texture(s) — {size} (enable removal to strip them)"},
+    'unused_tex_deleted':  {'fr': "  🗑 {n} texture(s) inutilisée(s) supprimée(s) — {size} libéré(s)", 'en': "  🗑 {n} unused texture(s) removed — {size} freed"},
+    'unused_tex_no_vmt':   {'fr': "  Aucun .vmt : classement des textures inutilisées ignoré.", 'en': "  No .vmt: unused-texture check skipped."},
+
     # Mode batch
     'batch_none':           {'fr': "✗ ERREUR : Aucun addon trouvé pour le mode batch (sous-dossiers ou .gma attendus dans la source).", 'en': "✗ ERROR: No addon found for batch mode (subfolders or .gma files expected in source)."},
     'batch_found':          {'fr': "▶ Mode batch : {n} addon(s) détecté(s) dans {path}", 'en': "▶ Batch mode: {n} addon(s) detected in {path}"},
@@ -299,6 +347,9 @@ STRINGS: dict[str, dict[str, str]] = {
     'desc_chands': {'fr': "  Retire les bras à la 1ʳᵉ personne (c_arms, c_*)", 'en': "  Removes first-person arms (c_arms, c_*)"},
     'chk_unused':  {'fr': "Supprimer les fichiers inutiles", 'en': "Remove unused files"},
     'desc_unused': {'fr': "  .txt, .md, .pdf, .psd, .log…", 'en': "  .txt, .md, .pdf, .psd, .log…"},
+
+    'chk_remove_unused_tex':  {'fr': "Supprimer les textures inutilisées", 'en': "Remove unused textures"},
+    'desc_remove_unused_tex': {'fr': "  Retire les .vtf référencées par aucun .vmt", 'en': "  Strips .vtf files no .vmt references"},
 
     'chk_textures':  {'fr': "Optimiser les textures", 'en': "Optimize textures"},
     'label_max_res': {'fr': "Résolution max :", 'en': "Max resolution:"},
@@ -561,6 +612,7 @@ class Compressor:
             if self.opts.get('check_materials', True) and not self.cancel_flag.is_set():
                 self.set_status(self.t('status_materials'))
                 self._check_missing_textures(files)
+                self._analyze_texture_usage(files)
             else:
                 self.log(self.t('disabled'))
             self.set_progress(30)
@@ -731,6 +783,106 @@ class Compressor:
             self.log(self.t('missing_textures_none', n=checked))
         else:
             self.log(self.t('missing_textures_found', n=missing_total))
+
+    # ── Classification / rôles des textures ──────────────────────────────────
+
+    def _referenced_textures(self, files: dict) -> set:
+        """Ensemble des .vtf (chemins normalisés) référencés par au moins un .vmt."""
+        referenced = set()
+        pattern = re.compile(r'\$(\w+)"?\s+"([^"]*)"', re.IGNORECASE)
+        for path, data in files.items():
+            if not path.endswith('.vmt'):
+                continue
+            try:
+                text = data.decode('utf-8', errors='replace')
+            except Exception:
+                continue
+            for m in pattern.finditer(text):
+                if m.group(1).lower() not in VMT_TEXTURE_KEYS:
+                    continue
+                ref = m.group(2).strip()
+                if not ref or ref.lower() == 'env_cubemap':
+                    continue
+                tex_path = self._resolve_vtf_path(ref)
+                if tex_path:
+                    referenced.add(tex_path)
+        return referenced
+
+    @staticmethod
+    def _classify_texture_role(path: str) -> str:
+        """Devine le rôle d'une texture d'après son nom de fichier."""
+        name = path.lower()
+        # Cartes techniques : prioritaires car elles peuvent contenir un mot-clé
+        # de rôle (ex. head_normal) mais restent avant tout des cartes.
+        stem = name.rsplit('/', 1)[-1]
+        stem = stem.rsplit('.', 1)[0]
+        if stem.endswith(NORMALMAP_HINTS):
+            return 'role_normalmap'
+        if stem.endswith(EFFECTMAP_HINTS):
+            return 'role_effectmap'
+        for role, keywords in TEXTURE_ROLE_KEYWORDS:
+            if any(kw in name for kw in keywords):
+                return role
+        return 'role_other'
+
+    def _analyze_texture_usage(self, files: dict) -> None:
+        """Classe les textures par rôle et repère/supprime les inutilisées."""
+        tex_files = {k: v for k, v in files.items()
+                     if k != '__meta__' and Path(k).suffix.lower() in TEXTURE_EXTENSIONS}
+        if not tex_files:
+            self.log(self.t('classify_none'))
+            return
+
+        # ── Classement par rôle ──
+        by_role: dict[str, list[str]] = {}
+        for path in sorted(tex_files):
+            role = self._classify_texture_role(path)
+            by_role.setdefault(role, []).append(path)
+
+        self.log(self.t('classify_header'))
+        # Ordre d'affichage stable et lisible.
+        role_order = [r for r, _ in TEXTURE_ROLE_KEYWORDS]
+        role_order += ['role_normalmap', 'role_effectmap', 'role_other']
+        for role in role_order:
+            items = by_role.get(role)
+            if not items:
+                continue
+            self.log(self.t('classify_line', role=self.t(role), n=len(items)))
+            for path in items:
+                self.log(self.t('classify_item', path=path))
+
+        # ── Textures inutilisées (.vtf sans .vmt) ──
+        has_vmt = any(k.endswith('.vmt') for k in files)
+        if not has_vmt:
+            self.log(self.t('unused_tex_no_vmt'))
+            return
+
+        referenced = self._referenced_textures(files)
+        vtf_files = {k: v for k, v in tex_files.items() if k.endswith('.vtf')}
+        unused = [k for k in sorted(vtf_files) if k not in referenced]
+
+        if not unused:
+            self.log(self.t('unused_tex_none'))
+            return
+
+        unused_size = sum(len(files[k]) for k in unused)
+        remove = self.opts.get('remove_unused_textures', False)
+        self.log(self.t('unused_tex_header'))
+        for path in unused:
+            size = self._fmt_size(len(files[path]))
+            if remove:
+                self.log(self.t('unused_tex_removed', path=path, size=size))
+            else:
+                self.log(self.t('unused_tex_item', path=path, size=size))
+
+        if remove:
+            for path in unused:
+                del files[path]
+            self.log(self.t('unused_tex_deleted', n=len(unused),
+                             size=self._fmt_size(unused_size)))
+        else:
+            self.log(self.t('unused_tex_found', n=len(unused),
+                             size=self._fmt_size(unused_size)))
 
     # ── Textures ──────────────────────────────────────────────────────────────
 
@@ -1561,6 +1713,13 @@ class App:
         ttk.Checkbutton(left, text=self.t('chk_check_materials'),
                         variable=self.check_materials).pack(anchor='w', pady=(0, 5))
 
+        # Suppression des textures inutilisées
+        self.rem_unused_tex = tk.BooleanVar(value=False)
+        ttk.Checkbutton(left, text=self.t('chk_remove_unused_tex'),
+                        variable=self.rem_unused_tex).pack(anchor='w')
+        ttk.Label(left, text=self.t('desc_remove_unused_tex'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
         # Textures
         self.comp_tex = tk.BooleanVar(value=True)
         ttk.Checkbutton(right, text=self.t('chk_textures'),
@@ -1933,6 +2092,7 @@ class App:
             'gen_lua':           self.gen_lua.get(),
             'lua_chands':        self.lua_chands.get(),
             'check_materials':   self.check_materials.get(),
+            'remove_unused_textures': self.rem_unused_tex.get(),
             'target_size_mb':    target_size_mb,
             'dry_run':           self.dry_run.get(),
             'backup_original':   self.backup.get(),
@@ -2096,6 +2256,7 @@ class App:
             'rem_chands':          self.rem_chands.get(),
             'rem_unused':          self.rem_unused.get(),
             'check_materials':     self.check_materials.get(),
+            'rem_unused_tex':      self.rem_unused_tex.get(),
             'comp_tex':            self.comp_tex.get(),
             'max_res_no_limit':    not self.max_res.get().isdigit(),
             'max_res':             self.max_res.get(),
@@ -2121,6 +2282,7 @@ class App:
         self.rem_chands.set(state.get('rem_chands', True))
         self.rem_unused.set(state.get('rem_unused', True))
         self.check_materials.set(state.get('check_materials', True))
+        self.rem_unused_tex.set(state.get('rem_unused_tex', False))
         self.comp_tex.set(state.get('comp_tex', True))
         self.max_res.set(self.t('no_limit') if state.get('max_res_no_limit', False) else state.get('max_res', '1024'))
         self.tex_qual.set(state.get('tex_qual', 85))
@@ -2257,6 +2419,8 @@ Exemples :
     parser.add_argument('--batch', action='store_true',
                         help="Mode batch : traite chaque sous-dossier/.gma de "
                              "la source comme un addon distinct")
+    parser.add_argument('--remove-unused-textures', action='store_true',
+                        help="Supprimer les textures .vtf référencées par aucun .vmt")
     parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
                         help="Langue des messages (défaut : fr)")
 
@@ -2278,6 +2442,7 @@ Exemples :
         'gen_lua':           not args.no_lua,
         'lua_chands':        not args.no_lua_chands,
         'check_materials':   not args.no_check_materials,
+        'remove_unused_textures': args.remove_unused_textures,
         'target_size_mb':    args.target_size,
         'dry_run':           args.dry_run,
         'backup_original':   args.backup,

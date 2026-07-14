@@ -12,6 +12,8 @@ Disponible en **interface graphique** (GUI) et en **ligne de commande** (CLI).
 | **Supprimer les C-Hands** | Retire les modèles de bras à la 1ʳᵉ personne (`c_arms`, `c_*`) |
 | **Supprimer les fichiers inutiles** | Supprime `.txt`, `.md`, `.pdf`, `.psd`, `.log`, etc. |
 | **Vérification des matériaux** | Détecte les textures référencées par les `.vmt` mais absentes de l'addon |
+| **Rôle des textures** | Classe chaque texture par usage (tête, casque, corps, yeux, mains, cartes normales…) |
+| **Supprimer les textures inutilisées** | Repère les `.vtf` référencés par aucun `.vmt` et peut les supprimer |
 | **Optimiser les textures** | Redimensionne et recompresse `.vtf`, `.png`, `.jpg`, `.tga` |
 | **Résolution max des textures** | 256 / 512 / 1024 / 2048 / Aucune limite |
 | **Qualité des textures** | Curseur de 10 % à 100 % |
@@ -88,6 +90,7 @@ source output               Chemins source et sortie
 --no-lua                    Ne pas générer le fichier Lua PM
 --no-lua-chands             Ne pas inclure les C-Hands dans le Lua généré
 --no-check-materials        Ne pas vérifier les matériaux/textures manquants
+--remove-unused-textures    Supprimer les .vtf référencés par aucun .vmt
 --target-size MO            Taille cible en Mo (ajuste résolution/qualité automatiquement)
 --dry-run                   Mode aperçu : affiche les changements sans rien écrire
 --backup                    Sauvegarde l'original avant écrasement
