@@ -13,7 +13,12 @@ Disponible en **interface graphique** (GUI) et en **ligne de commande** (CLI).
 | **Supprimer les fichiers inutiles** | Supprime `.txt`, `.md`, `.pdf`, `.psd`, `.log`, etc. |
 | **Vérification des matériaux** | Détecte les textures référencées par les `.vmt` mais absentes de l'addon |
 | **Rôle des textures** | Classe chaque texture par usage (tête, casque, corps, yeux, mains, cartes normales…) |
-| **Supprimer les textures inutilisées** | Repère les `.vtf` référencés par aucun `.vmt` et peut les supprimer |
+| **Graphe de dépendances** | Lit les `.mdl` pour relier modèles → `.vmt` → `.vtf` et repérer les orphelins |
+| **Supprimer les textures inutilisées** | Repère les `.vtf`/`.vmt` orphelins et peut les supprimer |
+| **Détection de doublons** | Signale les textures au contenu strictement identique |
+| **Audit qualité** | Repère les textures surdimensionnées, non compressées ou non puissance de 2 |
+| **Recompression DXT** | Convertit les `.vtf` RGBA/BGR volumineux en DXT (avec vtflib) |
+| **Rapport HTML** | Récapitulatif visuel autonome (rôles, orphelins, doublons, audit) |
 | **Optimiser les textures** | Redimensionne et recompresse `.vtf`, `.png`, `.jpg`, `.tga` |
 | **Résolution max des textures** | 256 / 512 / 1024 / 2048 / Aucune limite |
 | **Qualité des textures** | Curseur de 10 % à 100 % |
@@ -91,6 +96,8 @@ source output               Chemins source et sortie
 --no-lua-chands             Ne pas inclure les C-Hands dans le Lua généré
 --no-check-materials        Ne pas vérifier les matériaux/textures manquants
 --remove-unused-textures    Supprimer les .vtf référencés par aucun .vmt
+--no-convert-uncompressed   Ne pas recompresser les .vtf non compressés en DXT
+--no-report                 Ne pas générer le rapport HTML d'analyse
 --target-size MO            Taille cible en Mo (ajuste résolution/qualité automatiquement)
 --dry-run                   Mode aperçu : affiche les changements sans rien écrire
 --backup                    Sauvegarde l'original avant écrasement
@@ -110,6 +117,18 @@ source output               Chemins source et sortie
 
 Les fichiers `.vtf` sont compressés nativement (sans dépendance).
 Sans `Pillow`/`ffmpeg`, les optimisations C-Hands, fichiers inutiles et ZIP fonctionnent toujours.
+
+---
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+Les tests couvrent le moteur d'analyse (parsing `.mdl`/`.vmt`/`.vtf`, graphe de
+dépendances, doublons, audit, rapport HTML) sans nécessiter d'interface graphique.
 
 ---
 

@@ -344,6 +344,8 @@ STRINGS: dict[str, dict[str, str]] = {
     'report_open':         {'fr': "📄 Ouvrir le rapport", 'en': "📄 Open report"},
     'chk_report':          {'fr': "Générer un rapport HTML", 'en': "Generate HTML report"},
     'desc_report':         {'fr': "  Récapitulatif visuel (rôles, orphelins, audit)", 'en': "  Visual summary (roles, orphans, audit)"},
+    'chk_convert':         {'fr': "Recompresser les textures non compressées (DXT)", 'en': "Recompress uncompressed textures (DXT)"},
+    'desc_convert':        {'fr': "  Convertit les .vtf RGBA/BGR volumineux en DXT", 'en': "  Converts bulky RGBA/BGR .vtf files to DXT"},
 
     # Mode batch
     'batch_none':           {'fr': "✗ ERREUR : Aucun addon trouvé pour le mode batch (sous-dossiers ou .gma attendus dans la source).", 'en': "✗ ERROR: No addon found for batch mode (subfolders or .gma files expected in source)."},
@@ -461,6 +463,8 @@ STRINGS: dict[str, dict[str, str]] = {
     'summary_body':    {'fr': "Avant :   {before}\nAprès :   {after}\nGagné :   {saved}  (-{pct}%)",
                         'en': "Before:  {before}\nAfter:   {after}\nSaved:   {saved}  (-{pct}%)"},
     'summary_open_q':  {'fr': "Ouvrir le dossier de sortie ?", 'en': "Open the output folder?"},
+    'summary_open_folder': {'fr': "📂 Ouvrir le dossier", 'en': "📂 Open folder"},
+    'summary_close':   {'fr': "Fermer", 'en': "Close"},
     'summary_dry_run': {'fr': "Mode aperçu : aucun fichier n'a réellement été écrit.", 'en': "Dry-run mode: no file was actually written."},
 
     # À propos
@@ -2406,6 +2410,20 @@ class App:
         ttk.Label(a2left, text=self.t('desc_backup'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
 
+        # Recompression DXT des textures non compressées
+        self.convert_uncompressed = tk.BooleanVar(value=True)
+        ttk.Checkbutton(a2left, text=self.t('chk_convert'),
+                        variable=self.convert_uncompressed).pack(anchor='w')
+        ttk.Label(a2left, text=self.t('desc_convert'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        # Rapport HTML d'analyse
+        self.gen_report = tk.BooleanVar(value=True)
+        ttk.Checkbutton(a2left, text=self.t('chk_report'),
+                        variable=self.gen_report).pack(anchor='w')
+        ttk.Label(a2left, text=self.t('desc_report'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
         # Taille cible
         self.target_size_enabled = tk.BooleanVar(value=False)
         ts_row = ttk.Frame(a2right)
@@ -2645,6 +2663,8 @@ class App:
             'lua_chands':        self.lua_chands.get(),
             'check_materials':   self.check_materials.get(),
             'remove_unused_textures': self.rem_unused_tex.get(),
+            'convert_uncompressed': self.convert_uncompressed.get(),
+            'gen_report':        self.gen_report.get(),
             'target_size_mb':    target_size_mb,
             'dry_run':           self.dry_run.get(),
             'backup_original':   self.backup.get(),
@@ -2699,9 +2719,41 @@ class App:
         if comp.opts.get('dry_run'):
             messagebox.showinfo(self.t('summary_title'), body + "\n\n" + self.t('summary_dry_run'))
             return
-        if messagebox.askyesno(self.t('summary_title'),
-                               body + "\n\n" + self.t('summary_open_q')):
-            self._open_output()
+
+        report_path = getattr(comp, 'report_path', None)
+
+        win = tk.Toplevel(self.root)
+        win.title(self.t('summary_title'))
+        win.configure(bg=self.BG)
+        win.transient(self.root)
+        win.resizable(False, False)
+
+        wrap = tk.Frame(win, bg=self.BG, padx=24, pady=20)
+        wrap.pack(fill='both', expand=True)
+
+        tk.Label(wrap, text=self.t('summary_title'), bg=self.BG, fg=self.ACCENT,
+                 font=('Segoe UI', 14, 'bold')).pack(anchor='w')
+        tk.Label(wrap, text=body, bg=self.BG, fg=self.FG, justify='left',
+                 font=('Segoe UI', 10)).pack(anchor='w', pady=(10, 16))
+
+        btn_row = tk.Frame(wrap, bg=self.BG)
+        btn_row.pack(fill='x')
+        ttk.Button(btn_row, text=self.t('summary_open_folder'),
+                   style='Accent.TButton',
+                   command=lambda: (win.destroy(), self._open_output())
+                   ).pack(side='left')
+        if report_path and Path(report_path).exists():
+            ttk.Button(btn_row, text=self.t('report_open'),
+                       command=lambda: self._open_path(report_path)
+                       ).pack(side='left', padx=(8, 0))
+        ttk.Button(btn_row, text=self.t('summary_close'),
+                   command=win.destroy).pack(side='right')
+
+        win.update_idletasks()
+        x = self.root.winfo_rootx() + (self.root.winfo_width() - win.winfo_width()) // 2
+        y = self.root.winfo_rooty() + (self.root.winfo_height() - win.winfo_height()) // 2
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+        win.grab_set()
 
     def _cancel(self):
         if self._compressor:
@@ -2710,13 +2762,18 @@ class App:
     def _open_output(self):
         out = Path(self.output_var.get().strip())
         target = out if out.is_dir() else out.parent
+        self._open_path(target)
+
+    def _open_path(self, target):
+        """Ouvre un fichier ou un dossier avec l'application par défaut de l'OS."""
+        target = str(target)
         try:
             if sys.platform == 'win32':
-                os.startfile(str(target))
+                os.startfile(target)
             elif sys.platform == 'darwin':
-                subprocess.run(['open', str(target)])
+                subprocess.run(['open', target])
             else:
-                subprocess.run(['xdg-open', str(target)])
+                subprocess.run(['xdg-open', target])
         except Exception as e:
             messagebox.showerror(self.t('msg_error_title'), self.t('msg_open_folder_error', e=e))
 
@@ -2809,6 +2866,8 @@ class App:
             'rem_unused':          self.rem_unused.get(),
             'check_materials':     self.check_materials.get(),
             'rem_unused_tex':      self.rem_unused_tex.get(),
+            'convert_uncompressed': self.convert_uncompressed.get(),
+            'gen_report':          self.gen_report.get(),
             'comp_tex':            self.comp_tex.get(),
             'max_res_no_limit':    not self.max_res.get().isdigit(),
             'max_res':             self.max_res.get(),
@@ -2835,6 +2894,8 @@ class App:
         self.rem_unused.set(state.get('rem_unused', True))
         self.check_materials.set(state.get('check_materials', True))
         self.rem_unused_tex.set(state.get('rem_unused_tex', False))
+        self.convert_uncompressed.set(state.get('convert_uncompressed', True))
+        self.gen_report.set(state.get('gen_report', True))
         self.comp_tex.set(state.get('comp_tex', True))
         self.max_res.set(self.t('no_limit') if state.get('max_res_no_limit', False) else state.get('max_res', '1024'))
         self.tex_qual.set(state.get('tex_qual', 85))
