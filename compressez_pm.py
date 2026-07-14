@@ -148,6 +148,26 @@ VMT_TEXTURE_KEYS = {
     'iris', 'corneatexture', 'displacementmap', 'blendmask',
 }
 
+# Rôle d'une texture déterminé par des mots-clés dans son nom de fichier.
+# L'ordre compte : les rôles les plus spécifiques doivent passer en premier.
+# Clé de rôle -> liste de mots-clés (FR/EN) recherchés dans le chemin.
+TEXTURE_ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ('role_eye_effect', ('eyeglow', 'eyeball', 'glowing_eye', 'eye_glow')),
+    ('role_eyes',       ('eye', 'iris', 'cornea', 'oeil', 'yeux', 'pupil')),
+    ('role_helmet',     ('helmet', 'casque', 'hat', 'chapeau', 'cap', 'mask', 'masque', 'hood', 'capuche')),
+    ('role_hair',       ('hair', 'cheveux', 'beard', 'barbe', 'brow', 'lash', 'sourcil')),
+    ('role_mouth',      ('mouth', 'teeth', 'tooth', 'bouche', 'dent', 'tongue', 'langue', 'lip', 'levre')),
+    ('role_head',       ('head', 'face', 'tete', 'visage', 'skin_head', 'faceskin')),
+    ('role_hands',      ('hand', 'arm', 'glove', 'main', 'bras', 'gant', 'c_arms', 'fist', 'finger')),
+    ('role_legs',       ('leg', 'foot', 'feet', 'boot', 'shoe', 'pant', 'jambe', 'pied', 'botte', 'chaussure', 'thigh')),
+    ('role_body',       ('body', 'torso', 'chest', 'corps', 'torse', 'suit', 'shirt', 'jacket', 'vest', 'cloth', 'outfit', 'skin')),
+    ('role_accessory',  ('accessor', 'bag', 'belt', 'ceinture', 'strap', 'pouch', 'badge', 'patch', 'weapon', 'gun')),
+]
+
+# Suffixes de nom indiquant une carte technique plutôt qu'un rôle visuel.
+NORMALMAP_HINTS = ('_normal', '_n', '_nrm', '_bump', '_ddn')
+EFFECTMAP_HINTS = ('_phong', '_spec', '_exp', '_gloss', '_ao', '_mask', '_illum', '_detail')
+
 
 # ─── Internationalisation (FR/EN) ────────────────────────────────────────────
 
@@ -250,6 +270,83 @@ STRINGS: dict[str, dict[str, str]] = {
     'missing_textures_none':   {'fr': "  ✓ Aucune texture manquante détectée ({n} .vmt vérifié(s))", 'en': "  ✓ No missing textures detected ({n} .vmt checked)"},
     'missing_textures_found':  {'fr': "  ⚠ {n} texture(s) manquante(s) détectée(s)", 'en': "  ⚠ {n} missing texture(s) detected"},
 
+    # Classification et rôles des textures
+    'classify_header':     {'fr': "  ── Rôle des textures ──", 'en': "  ── Texture roles ──"},
+    'classify_line':       {'fr': "  {role} : {n} texture(s)", 'en': "  {role}: {n} texture(s)"},
+    'classify_item':       {'fr': "      • {path}", 'en': "      • {path}"},
+    'classify_none':       {'fr': "  Aucune texture à classer.", 'en': "  No texture to classify."},
+    'role_head':           {'fr': "Tête / Visage", 'en': "Head / Face"},
+    'role_helmet':         {'fr': "Casque / Chapeau", 'en': "Helmet / Hat"},
+    'role_hair':           {'fr': "Cheveux", 'en': "Hair"},
+    'role_eyes':           {'fr': "Yeux", 'en': "Eyes"},
+    'role_mouth':          {'fr': "Bouche / Dents", 'en': "Mouth / Teeth"},
+    'role_body':           {'fr': "Corps / Torse", 'en': "Body / Torso"},
+    'role_hands':          {'fr': "Mains / Bras", 'en': "Hands / Arms"},
+    'role_legs':           {'fr': "Jambes / Pieds", 'en': "Legs / Feet"},
+    'role_accessory':      {'fr': "Accessoires", 'en': "Accessories"},
+    'role_normalmap':      {'fr': "Cartes normales / bump", 'en': "Normal / bump maps"},
+    'role_effectmap':      {'fr': "Cartes d'effet (phong, spéculaire…)", 'en': "Effect maps (phong, specular…)"},
+    'role_eye_effect':     {'fr': "Effets (yeux brillants, œil…)", 'en': "Eye effects (glow, eyeball…)"},
+    'role_other':          {'fr': "Autre / Non classé", 'en': "Other / Unclassified"},
+
+    # Textures inutilisées
+    'unused_tex_header':   {'fr': "  ── Textures inutilisées ──", 'en': "  ── Unused textures ──"},
+    'unused_tex_item':     {'fr': "  ⚠ Inutilisée (aucun .vmt) : {path} ({size})", 'en': "  ⚠ Unused (no .vmt): {path} ({size})"},
+    'unused_tex_removed':  {'fr': "  🗑 Supprimée : {path} ({size})", 'en': "  🗑 Removed: {path} ({size})"},
+    'unused_tex_none':     {'fr': "  ✓ Aucune texture inutilisée détectée.", 'en': "  ✓ No unused texture detected."},
+    'unused_tex_found':    {'fr': "  ⚠ {n} texture(s) inutilisée(s) — {size} (activez la suppression pour les retirer)", 'en': "  ⚠ {n} unused texture(s) — {size} (enable removal to strip them)"},
+    'unused_tex_deleted':  {'fr': "  🗑 {n} texture(s) inutilisée(s) supprimée(s) — {size} libéré(s)", 'en': "  🗑 {n} unused texture(s) removed — {size} freed"},
+    'unused_tex_no_vmt':   {'fr': "  Aucun .vmt : classement des textures inutilisées ignoré.", 'en': "  No .vmt: unused-texture check skipped."},
+
+    # Matériaux (.vmt) orphelins — non référencés par un .mdl
+    'orphan_vmt_header':   {'fr': "  ── Matériaux orphelins ──", 'en': "  ── Orphan materials ──"},
+    'orphan_vmt_item':     {'fr': "  ⚠ Orphelin (aucun .mdl) : {path} ({size})", 'en': "  ⚠ Orphan (no .mdl): {path} ({size})"},
+    'orphan_vmt_removed':  {'fr': "  🗑 Supprimé : {path} ({size})", 'en': "  🗑 Removed: {path} ({size})"},
+    'orphan_vmt_found':    {'fr': "  ⚠ {n} matériau(x) orphelin(s) — {size}", 'en': "  ⚠ {n} orphan material(s) — {size}"},
+    'orphan_vmt_deleted':  {'fr': "  🗑 {n} matériau(x) orphelin(s) supprimé(s) — {size} libéré(s)", 'en': "  🗑 {n} orphan material(s) removed — {size} freed"},
+
+    # Doublons de textures
+    'dup_header':          {'fr': "  ── Doublons de textures ──", 'en': "  ── Duplicate textures ──"},
+    'dup_group':           {'fr': "  ⧉ {n} copies identiques ({size} chacune) :", 'en': "  ⧉ {n} identical copies ({size} each):"},
+    'dup_item':            {'fr': "      • {path}", 'en': "      • {path}"},
+    'dup_none':            {'fr': "  ✓ Aucun doublon exact détecté.", 'en': "  ✓ No exact duplicate detected."},
+    'dup_summary':         {'fr': "  ⧉ {groups} groupe(s) de doublons — {size} récupérable(s) par déduplication", 'en': "  ⧉ {groups} duplicate group(s) — {size} recoverable via dedup"},
+
+    # Audit des textures
+    'audit_header':        {'fr': "  ── Audit des textures ──", 'en': "  ── Texture audit ──"},
+    'audit_oversized':     {'fr': "  ⚠ Surdimensionnée : {path} ({detail})", 'en': "  ⚠ Oversized: {path} ({detail})"},
+    'audit_uncompressed':  {'fr': "  ⚠ Non compressée : {path} (format {detail} → DXT recommandé)", 'en': "  ⚠ Uncompressed: {path} (format {detail} → DXT recommended)"},
+    'audit_npot':          {'fr': "  ⚠ Non puissance de 2 : {path} ({detail})", 'en': "  ⚠ Not power-of-two: {path} ({detail})"},
+    'audit_none':          {'fr': "  ✓ Aucun problème de texture détecté.", 'en': "  ✓ No texture issue detected."},
+    'audit_summary':       {'fr': "  ⚠ {n} avertissement(s) d'audit", 'en': "  ⚠ {n} audit warning(s)"},
+
+    # Rapport HTML
+    'report_written':      {'fr': "▶ Rapport HTML généré : {path}", 'en': "▶ HTML report generated: {path}"},
+    'report_title':        {'fr': "Rapport d'analyse — {name}", 'en': "Analysis report — {name}"},
+    'report_subtitle':     {'fr': "Compressez PM GMod — analyse de l'addon", 'en': "Compressez PM GMod — addon analysis"},
+    'report_sum_original': {'fr': "Taille d'origine", 'en': "Original size"},
+    'report_sum_final':    {'fr': "Taille finale", 'en': "Final size"},
+    'report_sum_saved':    {'fr': "Réduction", 'en': "Reduction"},
+    'report_sum_files':    {'fr': "Fichiers", 'en': "Files"},
+    'report_sec_roles':    {'fr': "Rôle des textures", 'en': "Texture roles"},
+    'report_sec_orphans':  {'fr': "Fichiers inutilisés", 'en': "Unused files"},
+    'report_sec_dups':     {'fr': "Doublons exacts", 'en': "Exact duplicates"},
+    'report_sec_audit':    {'fr': "Audit qualité", 'en': "Quality audit"},
+    'report_col_texture':  {'fr': "Texture", 'en': "Texture"},
+    'report_col_issue':    {'fr': "Problème", 'en': "Issue"},
+    'report_col_detail':   {'fr': "Détail", 'en': "Detail"},
+    'report_removed_badge':{'fr': "supprimé(s)", 'en': "removed"},
+    'report_kept_badge':   {'fr': "conservé(s)", 'en': "kept"},
+    'report_empty':        {'fr': "Rien à signaler.", 'en': "Nothing to report."},
+    'report_audit_oversized':    {'fr': "Surdimensionnée", 'en': "Oversized"},
+    'report_audit_uncompressed': {'fr': "Non compressée", 'en': "Uncompressed"},
+    'report_audit_npot':         {'fr': "Non puissance de 2", 'en': "Not power-of-two"},
+    'report_open':         {'fr': "📄 Ouvrir le rapport", 'en': "📄 Open report"},
+    'chk_report':          {'fr': "Générer un rapport HTML", 'en': "Generate HTML report"},
+    'desc_report':         {'fr': "  Récapitulatif visuel (rôles, orphelins, audit)", 'en': "  Visual summary (roles, orphans, audit)"},
+    'chk_convert':         {'fr': "Recompresser les textures non compressées (DXT)", 'en': "Recompress uncompressed textures (DXT)"},
+    'desc_convert':        {'fr': "  Convertit les .vtf RGBA/BGR volumineux en DXT", 'en': "  Converts bulky RGBA/BGR .vtf files to DXT"},
+
     # Mode batch
     'batch_none':           {'fr': "✗ ERREUR : Aucun addon trouvé pour le mode batch (sous-dossiers ou .gma attendus dans la source).", 'en': "✗ ERROR: No addon found for batch mode (subfolders or .gma files expected in source)."},
     'batch_found':          {'fr': "▶ Mode batch : {n} addon(s) détecté(s) dans {path}", 'en': "▶ Batch mode: {n} addon(s) detected in {path}"},
@@ -299,6 +396,9 @@ STRINGS: dict[str, dict[str, str]] = {
     'desc_chands': {'fr': "  Retire les bras à la 1ʳᵉ personne (c_arms, c_*)", 'en': "  Removes first-person arms (c_arms, c_*)"},
     'chk_unused':  {'fr': "Supprimer les fichiers inutiles", 'en': "Remove unused files"},
     'desc_unused': {'fr': "  .txt, .md, .pdf, .psd, .log…", 'en': "  .txt, .md, .pdf, .psd, .log…"},
+
+    'chk_remove_unused_tex':  {'fr': "Supprimer les textures inutilisées", 'en': "Remove unused textures"},
+    'desc_remove_unused_tex': {'fr': "  Retire les .vtf référencées par aucun .vmt", 'en': "  Strips .vtf files no .vmt references"},
 
     'chk_textures':  {'fr': "Optimiser les textures", 'en': "Optimize textures"},
     'label_max_res': {'fr': "Résolution max :", 'en': "Max resolution:"},
@@ -363,6 +463,8 @@ STRINGS: dict[str, dict[str, str]] = {
     'summary_body':    {'fr': "Avant :   {before}\nAprès :   {after}\nGagné :   {saved}  (-{pct}%)",
                         'en': "Before:  {before}\nAfter:   {after}\nSaved:   {saved}  (-{pct}%)"},
     'summary_open_q':  {'fr': "Ouvrir le dossier de sortie ?", 'en': "Open the output folder?"},
+    'summary_open_folder': {'fr': "📂 Ouvrir le dossier", 'en': "📂 Open folder"},
+    'summary_close':   {'fr': "Fermer", 'en': "Close"},
     'summary_dry_run': {'fr': "Mode aperçu : aucun fichier n'a réellement été écrit.", 'en': "Dry-run mode: no file was actually written."},
 
     # À propos
@@ -485,6 +587,377 @@ class GMAFile:
         f.write(s.encode('utf-8') + b'\x00')
 
 
+# ─── Moteur d'analyse (fonctions pures, testables sans GUI) ──────────────────
+#
+# Ce bloc contient toute la logique d'analyse d'un addon sous forme de
+# fonctions autonomes : parsing des .mdl/.vmt/.vtf, graphe de dépendances,
+# détection d'orphelins et de doublons, audit des textures. Elles ne
+# dépendent ni de tkinter ni de la classe Compressor, ce qui les rend
+# facilement testables (voir tests/test_analysis.py).
+
+# Suffixes de fichiers « compagnons » d'un modèle .mdl (même nom de base).
+MODEL_COMPANION_SUFFIXES = (
+    '.vvd', '.vtx', '.dx90.vtx', '.dx80.vtx', '.sw.vtx',
+    '.phy', '.ani', '.mdl',
+)
+
+
+def norm_key(path: str) -> str:
+    """Normalise un chemin d'addon (slashs avant, minuscules, sans slash initial)."""
+    return path.replace('\\', '/').lower().lstrip('/')
+
+
+def resolve_material_ref(ref: str) -> str:
+    """Transforme une référence de texture VMT en chemin `materials/....vtf`."""
+    ref = ref.strip().strip('"\'').replace('\\', '/').lower().lstrip('/')
+    if not ref:
+        return ''
+    if not ref.endswith('.vtf'):
+        ref += '.vtf'
+    if not ref.startswith('materials/'):
+        ref = 'materials/' + ref
+    return ref
+
+
+_VMT_KV_RE = re.compile(r'\$(\w+)"?\s+"?([^"\r\n{}]+)"?', re.IGNORECASE)
+
+
+def parse_vmt_refs(text: str) -> dict[str, str]:
+    """Retourne {clé_matériau: chemin_vtf_résolu} pour un contenu .vmt."""
+    refs: dict[str, str] = {}
+    for m in _VMT_KV_RE.finditer(text):
+        key = m.group(1).lower()
+        if key not in VMT_TEXTURE_KEYS:
+            continue
+        raw = m.group(2).strip()
+        if not raw or raw.lower() == 'env_cubemap':
+            continue
+        resolved = resolve_material_ref(raw)
+        if resolved:
+            refs[key] = resolved
+    return refs
+
+
+def _read_cstr(data: bytes, offset: int, limit: int = 260) -> str:
+    """Lit une chaîne C (terminée par \\0) à partir de `offset`."""
+    if offset < 0 or offset >= len(data):
+        return ''
+    end = data.find(b'\x00', offset, offset + limit)
+    if end == -1:
+        end = min(offset + limit, len(data))
+    return data[offset:end].decode('latin-1', errors='replace')
+
+
+def parse_mdl_materials(data: bytes) -> tuple[list[str], list[str]]:
+    """Extrait (noms_de_matériaux, dossiers_cdmaterials) d'un binaire .mdl.
+
+    Renvoie deux listes vides si l'en-tête n'est pas exploitable."""
+    if len(data) < 224 or data[:4] != b'IDST':
+        return [], []
+    try:
+        numtextures    = struct.unpack_from('<i', data, 204)[0]
+        textureindex   = struct.unpack_from('<i', data, 208)[0]
+        numcdtextures  = struct.unpack_from('<i', data, 212)[0]
+        cdtextureindex = struct.unpack_from('<i', data, 216)[0]
+
+        # Garde-fous contre des en-têtes corrompus.
+        if not (0 <= numtextures < 4096 and 0 <= numcdtextures < 512):
+            return [], []
+
+        names: list[str] = []
+        for i in range(numtextures):
+            struct_off = textureindex + i * 64
+            if struct_off + 4 > len(data):
+                break
+            sznameindex = struct.unpack_from('<i', data, struct_off)[0]
+            name = _read_cstr(data, struct_off + sznameindex)
+            if name:
+                names.append(name.replace('\\', '/').strip('/').lower())
+
+        dirs: list[str] = []
+        for i in range(numcdtextures):
+            ptr_off = cdtextureindex + i * 4
+            if ptr_off + 4 > len(data):
+                break
+            str_off = struct.unpack_from('<i', data, ptr_off)[0]
+            d = _read_cstr(data, str_off)
+            if d:
+                d = d.replace('\\', '/').lower().strip('/')
+                dirs.append(d + '/' if d and not d.endswith('/') else d)
+        return names, dirs
+    except (struct.error, IndexError):
+        return [], []
+
+
+def read_vtf_info(data: bytes) -> dict | None:
+    """Lit l'en-tête d'un .vtf : dimensions, format, mipmaps, version, flags."""
+    if len(data) < 63 or data[:4] != b'VTF\x00':
+        return None
+    try:
+        ver_maj, ver_min = struct.unpack_from('<II', data, 4)
+        width, height = struct.unpack_from('<HH', data, 16)
+        flags = struct.unpack_from('<I', data, 20)[0]
+        frames = struct.unpack_from('<H', data, 24)[0]
+        high_fmt = struct.unpack_from('<i', data, 52)[0]
+        mipmaps = data[56]
+        fmt_name = VTF_FORMAT_SIZES.get(high_fmt, (f'UNKNOWN_{high_fmt}',))[0]
+        return {
+            'version': (ver_maj, ver_min),
+            'width': width, 'height': height,
+            'format': high_fmt, 'format_name': fmt_name,
+            'mipmaps': mipmaps, 'flags': flags, 'frames': frames,
+        }
+    except (struct.error, IndexError):
+        return None
+
+
+def build_dependency_graph(files: dict) -> dict:
+    """Construit le graphe d'usage d'un addon.
+
+    Renvoie un dict :
+      reachable            : ensemble des fichiers considérés comme utilisés
+      referenced_vtf       : .vtf référencés par au moins un .vmt
+      referenced_vmt       : .vmt référencés par au moins un .mdl (si parsable)
+      orphan_vtf           : .vtf référencés par aucun .vmt
+      orphan_vmt           : .vmt référencés par aucun .mdl
+      mdl_materials_parsed : True si au moins un .mdl a livré ses matériaux
+    """
+    keys = {k for k in files if k != '__meta__'}
+    vmt_keys = {k for k in keys if k.endswith('.vmt')}
+    vtf_keys = {k for k in keys if k.endswith('.vtf')}
+
+    # 1) .vtf référencés par les .vmt
+    referenced_vtf: set[str] = set()
+    for vk in vmt_keys:
+        try:
+            text = files[vk].decode('utf-8', errors='replace')
+        except Exception:
+            continue
+        for resolved in parse_vmt_refs(text).values():
+            referenced_vtf.add(resolved)
+
+    # 2) .vmt référencés par les .mdl (via cdmaterials + noms de matériaux)
+    referenced_vmt: set[str] = set()
+    mdl_materials_parsed = False
+    for mk in (k for k in keys if k.endswith('.mdl')):
+        names, dirs = parse_mdl_materials(files[mk])
+        if names:
+            mdl_materials_parsed = True
+        search_dirs = dirs or ['']
+        for name in names:
+            for d in search_dirs:
+                cand = norm_key('materials/' + d + name + '.vmt')
+                if cand in vmt_keys:
+                    referenced_vmt.add(cand)
+                    break
+            else:
+                # Repli : chercher n'importe quel .vmt au nom de base identique.
+                base = name.rsplit('/', 1)[-1]
+                for vk in vmt_keys:
+                    if vk.rsplit('/', 1)[-1] == base + '.vmt':
+                        referenced_vmt.add(vk)
+                        break
+
+    orphan_vtf = sorted(vtf_keys - referenced_vtf)
+    # On ne signale des .vmt orphelins que si l'on a réellement pu lire des
+    # matériaux dans au moins un .mdl (sinon risque de faux positifs).
+    orphan_vmt = sorted(vmt_keys - referenced_vmt) if mdl_materials_parsed else []
+
+    reachable = set(keys)
+    reachable -= set(orphan_vtf)
+    reachable -= set(orphan_vmt)
+
+    return {
+        'reachable': reachable,
+        'referenced_vtf': referenced_vtf,
+        'referenced_vmt': referenced_vmt,
+        'orphan_vtf': orphan_vtf,
+        'orphan_vmt': orphan_vmt,
+        'mdl_materials_parsed': mdl_materials_parsed,
+    }
+
+
+def find_duplicate_textures(files: dict) -> list[list[str]]:
+    """Groupe les textures dont le contenu binaire est strictement identique."""
+    import hashlib
+    by_hash: dict[str, list[str]] = {}
+    for k, v in files.items():
+        if k == '__meta__' or Path(k).suffix.lower() not in TEXTURE_EXTENSIONS:
+            continue
+        h = hashlib.sha1(v).hexdigest()
+        by_hash.setdefault(h, []).append(k)
+    return [sorted(g) for g in by_hash.values() if len(g) > 1]
+
+
+# Formats VTF non compressés (gaspilleurs) que l'on recommande de recompresser.
+VTF_UNCOMPRESSED_FORMATS = {
+    'RGBA8888', 'ABGR8888', 'ARGB8888', 'BGRA8888', 'BGRX8888',
+    'RGB888', 'BGR888', 'UVLX8888',
+}
+
+
+def audit_textures(files: dict, max_res: int | None = 1024) -> list[dict]:
+    """Repère les textures problématiques (surdimensionnées, non compressées…).
+
+    Chaque entrée : {path, issue, detail}. `issue` est une clé de traduction."""
+    issues: list[dict] = []
+    for k, v in files.items():
+        if k == '__meta__' or not k.endswith('.vtf'):
+            continue
+        info = read_vtf_info(v)
+        if not info:
+            continue
+        w, h = info['width'], info['height']
+        if max_res and max(w, h) > max_res:
+            issues.append({'path': k, 'issue': 'audit_oversized',
+                           'detail': f"{w}×{h} > {max_res}px"})
+        if info['format_name'] in VTF_UNCOMPRESSED_FORMATS:
+            issues.append({'path': k, 'issue': 'audit_uncompressed',
+                           'detail': info['format_name']})
+        if w and h and ((w & (w - 1)) or (h & (h - 1))):
+            issues.append({'path': k, 'issue': 'audit_npot',
+                           'detail': f"{w}×{h}"})
+    return issues
+
+
+def build_html_report(report: dict) -> str:
+    """Construit un rapport HTML autonome (thème clair/sombre) à partir d'un
+    dict `report` déjà traduit. Fonction pure et testable."""
+    import html as _html
+
+    def esc(s) -> str:
+        return _html.escape(str(s))
+
+    title = report.get('title', 'Rapport')
+    subtitle = report.get('subtitle', '')
+    s = report.get('summary', {})
+    parts: list[str] = []
+
+    # Cartes de synthèse
+    cards = [
+        (report['labels']['original'], s.get('original', '—')),
+        (report['labels']['final'],    s.get('final', '—')),
+        (report['labels']['saved'],    s.get('reduction', '—')),
+        (report['labels']['files'],    s.get('files', '—')),
+    ]
+    cards_html = ''.join(
+        f'<div class="card"><div class="k">{esc(k)}</div>'
+        f'<div class="v">{esc(v)}</div></div>' for k, v in cards)
+    parts.append(f'<div class="cards">{cards_html}</div>')
+
+    # Rôles des textures
+    roles = report.get('roles', [])
+    if roles:
+        blocks = []
+        for label, items in roles:
+            lis = ''.join(f'<li>{esc(p)}</li>' for p in items)
+            blocks.append(
+                f'<details open><summary>{esc(label)} '
+                f'<span class="badge">{len(items)}</span></summary>'
+                f'<ul class="files">{lis}</ul></details>')
+        parts.append(_section(report['labels']['sec_roles'], ''.join(blocks)))
+
+    # Orphelins
+    orphans = report.get('orphans', [])
+    if orphans:
+        badge = report['labels']['removed'] if report.get('removed') else report['labels']['kept']
+        lis = ''.join(f'<li>{esc(p)}</li>' for p in orphans)
+        body = (f'<p class="tag {"del" if report.get("removed") else "keep"}">'
+                f'{esc(badge)}</p><ul class="files">{lis}</ul>')
+        parts.append(_section(report['labels']['sec_orphans'], body))
+
+    # Doublons
+    dups = report.get('duplicates', [])
+    if dups:
+        blocks = []
+        for group in dups:
+            lis = ''.join(f'<li>{esc(p)}</li>' for p in group)
+            blocks.append(f'<details><summary>{len(group)}×</summary>'
+                          f'<ul class="files">{lis}</ul></details>')
+        parts.append(_section(report['labels']['sec_dups'], ''.join(blocks)))
+
+    # Audit
+    audit = report.get('audit', [])
+    if audit:
+        rows = ''.join(
+            f'<tr><td>{esc(a["path"])}</td><td>{esc(a["label"])}</td>'
+            f'<td>{esc(a["detail"])}</td></tr>' for a in audit)
+        lbl = report['labels']
+        table = (f'<table><thead><tr><th>{esc(lbl["col_texture"])}</th>'
+                 f'<th>{esc(lbl["col_issue"])}</th>'
+                 f'<th>{esc(lbl["col_detail"])}</th></tr></thead>'
+                 f'<tbody>{rows}</tbody></table>')
+        parts.append(_section(lbl['sec_audit'], table))
+
+    body = '\n'.join(parts) or f'<p>{esc(report["labels"]["empty"])}</p>'
+    return _HTML_TEMPLATE.format(
+        title=esc(title), subtitle=esc(subtitle), body=body)
+
+
+def _section(title: str, inner: str) -> str:
+    import html as _html
+    return (f'<section><h2>{_html.escape(title)}</h2>{inner}</section>')
+
+
+_HTML_TEMPLATE = """<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>
+  :root {{
+    --bg:#f4f6fb; --fg:#1b2430; --sub:#5b6675; --card:#ffffff;
+    --accent:#3b82f6; --border:#e2e8f0; --del:#ef4444; --keep:#10b981;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{
+      --bg:#0f141b; --fg:#e6edf3; --sub:#93a1b0; --card:#161d26;
+      --accent:#60a5fa; --border:#26313d; --del:#f87171; --keep:#34d399;
+    }}
+  }}
+  * {{ box-sizing:border-box; }}
+  body {{ margin:0; padding:32px; background:var(--bg); color:var(--fg);
+    font-family:'Segoe UI',system-ui,sans-serif; line-height:1.5; }}
+  header {{ margin-bottom:24px; }}
+  h1 {{ margin:0; font-size:22px; }}
+  .sub {{ color:var(--sub); font-size:14px; }}
+  .cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px; margin-bottom:28px; }}
+  .card {{ background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:14px 16px; }}
+  .card .k {{ color:var(--sub); font-size:12px; text-transform:uppercase;
+    letter-spacing:.04em; }}
+  .card .v {{ font-size:22px; font-weight:700; margin-top:4px; }}
+  section {{ background:var(--card); border:1px solid var(--border);
+    border-radius:12px; padding:16px 20px; margin-bottom:18px; }}
+  h2 {{ margin:0 0 12px; font-size:16px; border-left:3px solid var(--accent);
+    padding-left:10px; }}
+  details {{ margin:6px 0; }}
+  summary {{ cursor:pointer; font-weight:600; }}
+  .badge {{ background:var(--accent); color:#fff; border-radius:10px;
+    padding:1px 8px; font-size:12px; margin-left:6px; }}
+  ul.files {{ margin:8px 0 8px 4px; padding-left:18px; }}
+  ul.files li {{ font-family:ui-monospace,monospace; font-size:12.5px;
+    color:var(--sub); word-break:break-all; }}
+  .tag {{ display:inline-block; padding:2px 10px; border-radius:8px;
+    font-size:12px; font-weight:700; }}
+  .tag.del {{ background:var(--del); color:#fff; }}
+  .tag.keep {{ background:var(--keep); color:#04231a; }}
+  table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+  th, td {{ text-align:left; padding:7px 8px; border-bottom:1px solid var(--border);
+    word-break:break-all; }}
+  th {{ color:var(--sub); font-weight:600; }}
+</style>
+</head>
+<body>
+  <header><h1>{title}</h1><div class="sub">{subtitle}</div></header>
+  {body}
+</body>
+</html>
+"""
+
+
 # ─── Compresseur ─────────────────────────────────────────────────────────────
 
 class Compressor:
@@ -502,6 +975,9 @@ class Compressor:
         self.original_size: int | None = None
         self.final_size: int | None = None
         self.reduction: float | None = None
+        self.analysis: dict = {}
+        self.report_path: str | None = None
+        self._tex_cache: dict = {}
         self.lang        = opts.get('lang', 'fr')
 
     def t(self, key: str, **kwargs) -> str:
@@ -561,6 +1037,7 @@ class Compressor:
             if self.opts.get('check_materials', True) and not self.cancel_flag.is_set():
                 self.set_status(self.t('status_materials'))
                 self._check_missing_textures(files)
+                self._analyze_texture_usage(files)
             else:
                 self.log(self.t('disabled'))
             self.set_progress(30)
@@ -618,6 +1095,8 @@ class Compressor:
                 self.log("")
                 self.log(self.t('final_size', size=self._fmt_size(final_size)))
                 self.log(self.t('final_reduction', pct=f"{reduction:.1f}"))
+                if self.opts.get('gen_report', True):
+                    self._write_html_report(files, src)
                 self.log(self.t('success'))
                 self.set_status(self.t('status_done'))
             else:
@@ -683,14 +1162,7 @@ class Compressor:
 
     @staticmethod
     def _resolve_vtf_path(ref: str) -> str:
-        ref = ref.strip().strip('"\'').replace('\\', '/').lower().lstrip('/')
-        if not ref:
-            return ''
-        if not ref.endswith('.vtf'):
-            ref += '.vtf'
-        if not ref.startswith('materials/'):
-            ref = 'materials/' + ref
-        return ref
+        return resolve_material_ref(ref)
 
     def _check_missing_textures(self, files: dict) -> None:
         vmt_files = {k: v for k, v in files.items() if k.endswith('.vmt')}
@@ -732,6 +1204,204 @@ class Compressor:
         else:
             self.log(self.t('missing_textures_found', n=missing_total))
 
+    # ── Classification / rôles des textures ──────────────────────────────────
+
+    @staticmethod
+    def _classify_texture_role(path: str) -> str:
+        """Devine le rôle d'une texture d'après son nom de fichier."""
+        name = path.lower()
+        # Cartes techniques : prioritaires car elles peuvent contenir un mot-clé
+        # de rôle (ex. head_normal) mais restent avant tout des cartes.
+        stem = name.rsplit('/', 1)[-1]
+        stem = stem.rsplit('.', 1)[0]
+        if stem.endswith(NORMALMAP_HINTS):
+            return 'role_normalmap'
+        if stem.endswith(EFFECTMAP_HINTS):
+            return 'role_effectmap'
+        for role, keywords in TEXTURE_ROLE_KEYWORDS:
+            if any(kw in name for kw in keywords):
+                return role
+        return 'role_other'
+
+    def _analyze_texture_usage(self, files: dict) -> None:
+        """Analyse complète : rôles, orphelins (.vtf/.vmt), doublons et audit.
+
+        Remplit self.analysis (consommé par le rapport HTML) et applique les
+        suppressions si l'option remove_unused_textures est active."""
+        tex_files = {k: v for k, v in files.items()
+                     if k != '__meta__' and Path(k).suffix.lower() in TEXTURE_EXTENSIONS}
+        if not tex_files:
+            self.log(self.t('classify_none'))
+            self.analysis = {}
+            return
+
+        # ── 1) Classement par rôle ──
+        by_role: dict[str, list[str]] = {}
+        for path in sorted(tex_files):
+            by_role.setdefault(self._classify_texture_role(path), []).append(path)
+
+        self.log(self.t('classify_header'))
+        role_order = [r for r, _ in TEXTURE_ROLE_KEYWORDS]
+        role_order += ['role_normalmap', 'role_effectmap', 'role_other']
+        for role in role_order:
+            items = by_role.get(role)
+            if not items:
+                continue
+            self.log(self.t('classify_line', role=self.t(role), n=len(items)))
+            for path in items:
+                self.log(self.t('classify_item', path=path))
+
+        remove = self.opts.get('remove_unused_textures', False)
+        graph = build_dependency_graph(files)
+
+        # ── 2) Textures .vtf inutilisées ──
+        if not any(k.endswith('.vmt') for k in files):
+            self.log(self.t('unused_tex_no_vmt'))
+            orphan_vtf = []
+        else:
+            orphan_vtf = graph['orphan_vtf']
+            if not orphan_vtf:
+                self.log(self.t('unused_tex_none'))
+            else:
+                size_total = sum(len(files[k]) for k in orphan_vtf)
+                self.log(self.t('unused_tex_header'))
+                for path in orphan_vtf:
+                    size = self._fmt_size(len(files[path]))
+                    key = 'unused_tex_removed' if remove else 'unused_tex_item'
+                    self.log(self.t(key, path=path, size=size))
+                if remove:
+                    for path in orphan_vtf:
+                        del files[path]
+                    self.log(self.t('unused_tex_deleted', n=len(orphan_vtf),
+                                     size=self._fmt_size(size_total)))
+                else:
+                    self.log(self.t('unused_tex_found', n=len(orphan_vtf),
+                                     size=self._fmt_size(size_total)))
+
+        # ── 3) Matériaux .vmt orphelins (non référencés par un .mdl) ──
+        orphan_vmt = graph['orphan_vmt']
+        if orphan_vmt:
+            size_total = sum(len(files[k]) for k in orphan_vmt if k in files)
+            self.log(self.t('orphan_vmt_header'))
+            for path in orphan_vmt:
+                if path not in files:
+                    continue
+                size = self._fmt_size(len(files[path]))
+                key = 'orphan_vmt_removed' if remove else 'orphan_vmt_item'
+                self.log(self.t(key, path=path, size=size))
+            if remove:
+                for path in orphan_vmt:
+                    files.pop(path, None)
+                self.log(self.t('orphan_vmt_deleted', n=len(orphan_vmt),
+                                 size=self._fmt_size(size_total)))
+            else:
+                self.log(self.t('orphan_vmt_found', n=len(orphan_vmt),
+                                 size=self._fmt_size(size_total)))
+
+        # ── 4) Doublons exacts ──
+        duplicates = find_duplicate_textures(files)
+        if not duplicates:
+            self.log(self.t('dup_none'))
+        else:
+            self.log(self.t('dup_header'))
+            recoverable = 0
+            for group in duplicates:
+                each = len(files[group[0]])
+                recoverable += each * (len(group) - 1)
+                self.log(self.t('dup_group', n=len(group), size=self._fmt_size(each)))
+                for path in group:
+                    self.log(self.t('dup_item', path=path))
+            self.log(self.t('dup_summary', groups=len(duplicates),
+                             size=self._fmt_size(recoverable)))
+
+        # ── 5) Audit qualité ──
+        max_res_str = self.opts.get('max_resolution', '1024')
+        max_res = int(max_res_str) if str(max_res_str).isdigit() else None
+        issues = audit_textures(files, max_res)
+        if not issues:
+            self.log(self.t('audit_none'))
+        else:
+            self.log(self.t('audit_header'))
+            for it in issues:
+                self.log(self.t(it['issue'], path=it['path'], detail=it['detail']))
+            self.log(self.t('audit_summary', n=len(issues)))
+
+        # Résultats structurés pour le rapport HTML.
+        self.analysis = {
+            'roles': {r: list(by_role.get(r, [])) for r in role_order if by_role.get(r)},
+            'orphan_vtf': list(orphan_vtf),
+            'orphan_vmt': list(orphan_vmt),
+            'duplicates': duplicates,
+            'audit': issues,
+            'removed': remove,
+        }
+
+    # ── Rapport HTML ──────────────────────────────────────────────────────────
+
+    def _build_report_dict(self, files: dict, addon_name: str) -> dict:
+        a = self.analysis or {}
+        audit_lbl = {
+            'audit_oversized':    self.t('report_audit_oversized'),
+            'audit_uncompressed': self.t('report_audit_uncompressed'),
+            'audit_npot':         self.t('report_audit_npot'),
+        }
+        roles = [(self.t(role), items) for role, items in a.get('roles', {}).items()]
+        orphans = list(a.get('orphan_vtf', [])) + list(a.get('orphan_vmt', []))
+        audit = [{'path': it['path'], 'label': audit_lbl.get(it['issue'], it['issue']),
+                  'detail': it['detail']} for it in a.get('audit', [])]
+
+        reduction = f"-{self.reduction:.1f}%" if self.reduction is not None else '—'
+        return {
+            'title': self.t('report_title', name=addon_name),
+            'subtitle': self.t('report_subtitle'),
+            'removed': a.get('removed', False),
+            'summary': {
+                'original': self._fmt_size(self.original_size or 0),
+                'final': self._fmt_size(self.final_size or 0),
+                'reduction': reduction,
+                'files': str(sum(1 for k in files if k != '__meta__')),
+            },
+            'roles': roles,
+            'orphans': orphans,
+            'duplicates': a.get('duplicates', []),
+            'audit': audit,
+            'labels': {
+                'original': self.t('report_sum_original'),
+                'final': self.t('report_sum_final'),
+                'saved': self.t('report_sum_saved'),
+                'files': self.t('report_sum_files'),
+                'sec_roles': self.t('report_sec_roles'),
+                'sec_orphans': self.t('report_sec_orphans'),
+                'sec_dups': self.t('report_sec_dups'),
+                'sec_audit': self.t('report_sec_audit'),
+                'col_texture': self.t('report_col_texture'),
+                'col_issue': self.t('report_col_issue'),
+                'col_detail': self.t('report_col_detail'),
+                'removed': self.t('report_removed_badge'),
+                'kept': self.t('report_kept_badge'),
+                'empty': self.t('report_empty'),
+            },
+        }
+
+    def _write_html_report(self, files: dict, src: Path) -> None:
+        if self.opts.get('dry_run'):
+            return
+        try:
+            out = Path(self.opts['output'])
+            fmt = self.opts.get('output_format', 'folder')
+            if fmt == 'folder':
+                out.mkdir(parents=True, exist_ok=True)
+                report_path = out / 'rapport_compression.html'
+            else:
+                stem = out.stem or 'addon'
+                report_path = out.parent / (stem + '_rapport.html')
+            html = build_html_report(self._build_report_dict(files, src.stem))
+            report_path.write_text(html, encoding='utf-8')
+            self.report_path = str(report_path)
+            self.log(self.t('report_written', path=report_path))
+        except Exception:
+            pass  # le rapport ne doit jamais faire échouer la compression
+
     # ── Textures ──────────────────────────────────────────────────────────────
 
     def _optimize_textures(self, files: dict, max_res, quality: int, quiet: bool = False) -> None:
@@ -763,17 +1433,25 @@ class Compressor:
             ext = Path(path).suffix.lower()
             new_data = None
 
-            try:
-                if ext == '.vtf':
-                    new_data = self._process_vtf(path, data, max_res, quality)
-                elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
-                    new_data = self._process_image_pil(path, data, ext, max_res, quality)
-            except Exception as e:
-                # Un fichier corrompu ou non pris en charge ne doit jamais
-                # interrompre toute la compression : on le conserve tel quel.
-                if not quiet:
-                    self.log(self.t('texture_error', path=path, e=e))
-                new_data = None
+            # Cache mémoire : deux textures identiques (doublons) ou les
+            # multiples passes du mode « taille cible » ne sont traitées qu'une
+            # fois pour un jeu de paramètres donné.
+            cache_key = (hash(data), ext, max_res, quality)
+            if cache_key in self._tex_cache:
+                new_data = self._tex_cache[cache_key]
+            else:
+                try:
+                    if ext == '.vtf':
+                        new_data = self._process_vtf(path, data, max_res, quality)
+                    elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
+                        new_data = self._process_image_pil(path, data, ext, max_res, quality)
+                except Exception as e:
+                    # Un fichier corrompu ou non pris en charge ne doit jamais
+                    # interrompre toute la compression : on le conserve tel quel.
+                    if not quiet:
+                        self.log(self.t('texture_error', path=path, e=e))
+                    new_data = None
+                self._tex_cache[cache_key] = new_data
 
             if new_data and len(new_data) < len(data):
                 savings = len(data) - len(new_data)
@@ -861,7 +1539,37 @@ class Compressor:
             new_w = min(w, max_res)
             new_h = min(h, max_res)
             lib.image_resize(new_w, new_h)
+
+        # Recompression de format : un .vtf stocké en RGBA8888/BGR888… pèse
+        # 4 à 6× un DXT équivalent, sans différence visible en jeu. On tente la
+        # conversion de façon défensive (l'API vtflib varie selon les versions).
+        if self.opts.get('convert_uncompressed', True):
+            self._try_convert_dxt(lib, data)
+
         return bytes(lib.image_save_lump())
+
+    @staticmethod
+    def _try_convert_dxt(lib, original: bytes) -> None:
+        """Convertit une texture non compressée vers DXT1/DXT5 si possible.
+
+        Best-effort : toute incompatibilité d'API laisse l'image inchangée."""
+        info = read_vtf_info(original)
+        if not info or info['format_name'] not in VTF_UNCOMPRESSED_FORMATS:
+            return
+        try:
+            fmt_enum = getattr(vtflib, 'VTFImageFormat', None)
+            convert = getattr(lib, 'image_convert', None)
+            if fmt_enum is None or convert is None:
+                return
+            # Alpha présent -> DXT5 (préserve la transparence), sinon DXT1.
+            has_alpha = bool(getattr(lib, 'image_has_alpha', lambda: True)())
+            target_name = 'IMAGE_FORMAT_DXT5' if has_alpha else 'IMAGE_FORMAT_DXT1'
+            target = getattr(fmt_enum, target_name, None)
+            if target is not None:
+                convert(target)
+        except Exception:
+            # On ne compromet jamais la compression pour un échec de conversion.
+            pass
 
     def _process_vtf_mipstrip(self, data: bytes, max_res) -> bytes:
         """Réduit la résolution d'un VTF en supprimant les mipmaps les plus
@@ -1561,6 +2269,13 @@ class App:
         ttk.Checkbutton(left, text=self.t('chk_check_materials'),
                         variable=self.check_materials).pack(anchor='w', pady=(0, 5))
 
+        # Suppression des textures inutilisées
+        self.rem_unused_tex = tk.BooleanVar(value=False)
+        ttk.Checkbutton(left, text=self.t('chk_remove_unused_tex'),
+                        variable=self.rem_unused_tex).pack(anchor='w')
+        ttk.Label(left, text=self.t('desc_remove_unused_tex'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
         # Textures
         self.comp_tex = tk.BooleanVar(value=True)
         ttk.Checkbutton(right, text=self.t('chk_textures'),
@@ -1693,6 +2408,20 @@ class App:
         ttk.Checkbutton(a2left, text=self.t('chk_backup'),
                         variable=self.backup).pack(anchor='w')
         ttk.Label(a2left, text=self.t('desc_backup'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        # Recompression DXT des textures non compressées
+        self.convert_uncompressed = tk.BooleanVar(value=True)
+        ttk.Checkbutton(a2left, text=self.t('chk_convert'),
+                        variable=self.convert_uncompressed).pack(anchor='w')
+        ttk.Label(a2left, text=self.t('desc_convert'),
+                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+
+        # Rapport HTML d'analyse
+        self.gen_report = tk.BooleanVar(value=True)
+        ttk.Checkbutton(a2left, text=self.t('chk_report'),
+                        variable=self.gen_report).pack(anchor='w')
+        ttk.Label(a2left, text=self.t('desc_report'),
                   foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
 
         # Taille cible
@@ -1933,6 +2662,9 @@ class App:
             'gen_lua':           self.gen_lua.get(),
             'lua_chands':        self.lua_chands.get(),
             'check_materials':   self.check_materials.get(),
+            'remove_unused_textures': self.rem_unused_tex.get(),
+            'convert_uncompressed': self.convert_uncompressed.get(),
+            'gen_report':        self.gen_report.get(),
             'target_size_mb':    target_size_mb,
             'dry_run':           self.dry_run.get(),
             'backup_original':   self.backup.get(),
@@ -1987,9 +2719,41 @@ class App:
         if comp.opts.get('dry_run'):
             messagebox.showinfo(self.t('summary_title'), body + "\n\n" + self.t('summary_dry_run'))
             return
-        if messagebox.askyesno(self.t('summary_title'),
-                               body + "\n\n" + self.t('summary_open_q')):
-            self._open_output()
+
+        report_path = getattr(comp, 'report_path', None)
+
+        win = tk.Toplevel(self.root)
+        win.title(self.t('summary_title'))
+        win.configure(bg=self.BG)
+        win.transient(self.root)
+        win.resizable(False, False)
+
+        wrap = tk.Frame(win, bg=self.BG, padx=24, pady=20)
+        wrap.pack(fill='both', expand=True)
+
+        tk.Label(wrap, text=self.t('summary_title'), bg=self.BG, fg=self.ACCENT,
+                 font=('Segoe UI', 14, 'bold')).pack(anchor='w')
+        tk.Label(wrap, text=body, bg=self.BG, fg=self.FG, justify='left',
+                 font=('Segoe UI', 10)).pack(anchor='w', pady=(10, 16))
+
+        btn_row = tk.Frame(wrap, bg=self.BG)
+        btn_row.pack(fill='x')
+        ttk.Button(btn_row, text=self.t('summary_open_folder'),
+                   style='Accent.TButton',
+                   command=lambda: (win.destroy(), self._open_output())
+                   ).pack(side='left')
+        if report_path and Path(report_path).exists():
+            ttk.Button(btn_row, text=self.t('report_open'),
+                       command=lambda: self._open_path(report_path)
+                       ).pack(side='left', padx=(8, 0))
+        ttk.Button(btn_row, text=self.t('summary_close'),
+                   command=win.destroy).pack(side='right')
+
+        win.update_idletasks()
+        x = self.root.winfo_rootx() + (self.root.winfo_width() - win.winfo_width()) // 2
+        y = self.root.winfo_rooty() + (self.root.winfo_height() - win.winfo_height()) // 2
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+        win.grab_set()
 
     def _cancel(self):
         if self._compressor:
@@ -1998,13 +2762,18 @@ class App:
     def _open_output(self):
         out = Path(self.output_var.get().strip())
         target = out if out.is_dir() else out.parent
+        self._open_path(target)
+
+    def _open_path(self, target):
+        """Ouvre un fichier ou un dossier avec l'application par défaut de l'OS."""
+        target = str(target)
         try:
             if sys.platform == 'win32':
-                os.startfile(str(target))
+                os.startfile(target)
             elif sys.platform == 'darwin':
-                subprocess.run(['open', str(target)])
+                subprocess.run(['open', target])
             else:
-                subprocess.run(['xdg-open', str(target)])
+                subprocess.run(['xdg-open', target])
         except Exception as e:
             messagebox.showerror(self.t('msg_error_title'), self.t('msg_open_folder_error', e=e))
 
@@ -2096,6 +2865,9 @@ class App:
             'rem_chands':          self.rem_chands.get(),
             'rem_unused':          self.rem_unused.get(),
             'check_materials':     self.check_materials.get(),
+            'rem_unused_tex':      self.rem_unused_tex.get(),
+            'convert_uncompressed': self.convert_uncompressed.get(),
+            'gen_report':          self.gen_report.get(),
             'comp_tex':            self.comp_tex.get(),
             'max_res_no_limit':    not self.max_res.get().isdigit(),
             'max_res':             self.max_res.get(),
@@ -2121,6 +2893,9 @@ class App:
         self.rem_chands.set(state.get('rem_chands', True))
         self.rem_unused.set(state.get('rem_unused', True))
         self.check_materials.set(state.get('check_materials', True))
+        self.rem_unused_tex.set(state.get('rem_unused_tex', False))
+        self.convert_uncompressed.set(state.get('convert_uncompressed', True))
+        self.gen_report.set(state.get('gen_report', True))
         self.comp_tex.set(state.get('comp_tex', True))
         self.max_res.set(self.t('no_limit') if state.get('max_res_no_limit', False) else state.get('max_res', '1024'))
         self.tex_qual.set(state.get('tex_qual', 85))
@@ -2257,6 +3032,12 @@ Exemples :
     parser.add_argument('--batch', action='store_true',
                         help="Mode batch : traite chaque sous-dossier/.gma de "
                              "la source comme un addon distinct")
+    parser.add_argument('--remove-unused-textures', action='store_true',
+                        help="Supprimer les textures .vtf référencées par aucun .vmt")
+    parser.add_argument('--no-convert-uncompressed', action='store_true',
+                        help="Ne pas recompresser les .vtf non compressés en DXT")
+    parser.add_argument('--no-report', action='store_true',
+                        help="Ne pas générer le rapport HTML d'analyse")
     parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
                         help="Langue des messages (défaut : fr)")
 
@@ -2278,6 +3059,9 @@ Exemples :
         'gen_lua':           not args.no_lua,
         'lua_chands':        not args.no_lua_chands,
         'check_materials':   not args.no_check_materials,
+        'remove_unused_textures': args.remove_unused_textures,
+        'convert_uncompressed': not args.no_convert_uncompressed,
+        'gen_report':        not args.no_report,
         'target_size_mb':    args.target_size,
         'dry_run':           args.dry_run,
         'backup_original':   args.backup,
