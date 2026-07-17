@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 
 def _config_path() -> Path:
@@ -114,3 +114,70 @@ TEXTURE_ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
 # Suffixes de nom indiquant une carte technique plutôt qu'un rôle visuel.
 NORMALMAP_HINTS = ('_normal', '_n', '_nrm', '_bump', '_ddn')
 EFFECTMAP_HINTS = ('_phong', '_spec', '_exp', '_gloss', '_ao', '_mask', '_illum', '_detail')
+
+# Whitelist du format GMA : seuls ces motifs sont acceptés par Garry's Mod au
+# montage d'un .gma (source : gmad, AddonWhiteList.h). `*` matche aussi les `/`.
+GMA_WHITELIST = (
+    'addon.json',
+    'lua/*.lua',
+    'scenes/*.vcd',
+    'particles/*.pcf',
+    'resource/fonts/*.ttf',
+    'scripts/vehicles/*.txt',
+    'resource/localization/*/*.properties',
+    'maps/*.bsp',
+    'maps/*.lmp',
+    'maps/*.nav',
+    'maps/*.ain',
+    'maps/thumb/*.png',
+    'sound/*.wav',
+    'sound/*.mp3',
+    'sound/*.ogg',
+    'materials/*.vmt',
+    'materials/*.vtf',
+    'materials/*.png',
+    'materials/*.jpg',
+    'materials/*.jpeg',
+    'materials/colorcorrection/*.raw',
+    'models/*.mdl',
+    'models/*.phy',
+    'models/*.ani',
+    'models/*.vvd',
+    'models/*.vtx',
+    'gamemodes/*/*.txt',
+    'gamemodes/*/*.fgd',
+    'gamemodes/*/logo.png',
+    'gamemodes/*/icon24.png',
+    'gamemodes/*/gamemode/*.lua',
+    'gamemodes/*/entities/effects/*.lua',
+    'gamemodes/*/entities/weapons/*.lua',
+    'gamemodes/*/entities/entities/*.lua',
+    'gamemodes/*/backgrounds/*.png',
+    'gamemodes/*/content/models/*.mdl',
+    'gamemodes/*/content/models/*.phy',
+    'gamemodes/*/content/models/*.ani',
+    'gamemodes/*/content/models/*.vvd',
+    'gamemodes/*/content/models/*.vtx',
+    'gamemodes/*/content/materials/*.vmt',
+    'gamemodes/*/content/materials/*.vtf',
+    'gamemodes/*/content/materials/*.png',
+    'gamemodes/*/content/materials/*.jpg',
+    'gamemodes/*/content/materials/*.jpeg',
+    'gamemodes/*/content/scenes/*.vcd',
+    'gamemodes/*/content/particles/*.pcf',
+    'gamemodes/*/content/resource/fonts/*.ttf',
+    'gamemodes/*/content/scripts/vehicles/*.txt',
+    'gamemodes/*/content/resource/localization/*/*.properties',
+    'gamemodes/*/content/maps/*.bsp',
+    'gamemodes/*/content/maps/*.nav',
+    'gamemodes/*/content/maps/*.ain',
+    'gamemodes/*/content/maps/thumb/*.png',
+    'gamemodes/*/content/sound/*.wav',
+    'gamemodes/*/content/sound/*.mp3',
+    'gamemodes/*/content/sound/*.ogg',
+    'data_static/*.txt',
+    'data_static/*.dat',
+    'data_static/*.json',
+    'data_static/*.xml',
+    'data_static/*.csv',
+)

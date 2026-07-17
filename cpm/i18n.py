@@ -57,13 +57,15 @@ STRINGS: dict[str, dict[str, str]] = {
     'textures_reduced':{'fr': "  Textures réduites : {reduced}/{total}", 'en': "  Textures reduced: {reduced}/{total}"},
     'vtf_unchanged':   {'fr': "  .vtf inchangés : {n} (déjà sous la résolution max, ou format/structure non pris en charge)", 'en': "  .vtf unchanged: {n} (already under max resolution, or unsupported format/structure)"},
     'texture_error':   {'fr': "  ⚠ Texture ignorée (illisible) : {path} — {e}", 'en': "  ⚠ Texture skipped (unreadable): {path} — {e}"},
+    'textures_parallel': {'fr': "  Traitement sur {n} threads…", 'en': "  Processing on {n} threads…"},
     'no_limit':        {'fr': "Aucune limite", 'en': "No limit"},
 
     # Sons
     'no_sounds':    {'fr': "  Aucun son trouvé.", 'en': "  No sounds found."},
     'sounds_found': {'fr': "  {n} son(s) trouvé(s)…", 'en': "  {n} sound(s) found…"},
-    'sound_saving': {'fr': "  {path} → {new_path} : -{size}", 'en': "  {path} → {new_path}: -{size}"},
+    'sound_saving': {'fr': "  {path} : -{size}", 'en': "  {path}: -{size}"},
     'sound_error':  {'fr': "  Erreur son {path}: {e}", 'en': "  Sound error {path}: {e}"},
+    'sound_skipped_format': {'fr': "  ⚠ {path} : format non joué par GMod, laissé tel quel", 'en': "  ⚠ {path}: format not playable by GMod, left as-is"},
 
     # Lua
     'lua_no_models_player': {'fr': "  Lua : aucun .mdl dans models/player/, utilisation des modèles trouvés ailleurs dans models/", 'en': "  Lua: no .mdl in models/player/, using models found elsewhere in models/"},
@@ -72,6 +74,10 @@ STRINGS: dict[str, dict[str, str]] = {
     'lua_models_found':     {'fr': "  Lua : {n} modèle(s) trouvé(s)", 'en': "  Lua: {n} model(s) found"},
     'lua_updated':          {'fr': "  Lua mis à jour : {path}", 'en': "  Lua updated: {path}"},
     'lua_created':          {'fr': "  Lua créé : {path}", 'en': "  Lua created: {path}"},
+    'lua_hands_registered': {'fr': "  Lua : {n} c_hands enregistré(s) via AddValidHands", 'en': "  Lua: {n} c_hands registered via AddValidHands"},
+
+    # addon.json
+    'addon_json_created': {'fr': "  ✓ addon.json créé (requis par gmad) : {title}", 'en': "  ✓ addon.json created (required by gmad): {title}"},
 
     # Écriture
     'write_folder': {'fr': "  Dossier : {path}/", 'en': "  Folder: {path}/"},
@@ -142,6 +148,19 @@ STRINGS: dict[str, dict[str, str]] = {
     'dup_none':            {'fr': "  ✓ Aucun doublon exact détecté.", 'en': "  ✓ No exact duplicate detected."},
     'dup_summary':         {'fr': "  ⧉ {groups} groupe(s) de doublons — {size} récupérable(s) par déduplication", 'en': "  ⧉ {groups} duplicate group(s) — {size} recoverable via dedup"},
 
+    # Déduplication des textures
+    'dedup_merged':        {'fr': "  ⧉ Fusionné : {path} → {kept}", 'en': "  ⧉ Merged: {path} → {kept}"},
+    'dedup_done':          {'fr': "  ✓ {n} doublon(s) fusionné(s), {vmt} .vmt réécrit(s) — {size} libéré(s)", 'en': "  ✓ {n} duplicate(s) merged, {vmt} .vmt rewritten — {size} freed"},
+    'dedup_nothing':       {'fr': "  Aucun doublon .vtf fusionnable.", 'en': "  No mergeable .vtf duplicate."},
+
+    # Whitelist GMA
+    'whitelist_header':         {'fr': "  ── Compatibilité GMA ──", 'en': "  ── GMA compatibility ──"},
+    'whitelist_bad':            {'fr': "  ⚠ Refusé par GMod : {path}", 'en': "  ⚠ Rejected by GMod: {path}"},
+    'whitelist_stripped':       {'fr': "  🗑 Retiré (hors whitelist GMA) : {path}", 'en': "  🗑 Stripped (not GMA-whitelisted): {path}"},
+    'whitelist_none':           {'fr': "  ✓ Tous les fichiers sont acceptés par le format GMA.", 'en': "  ✓ All files are accepted by the GMA format."},
+    'whitelist_found':          {'fr': "  ⚠ {n} fichier(s) seraient refusés au montage du .gma (activez le retrait automatique)", 'en': "  ⚠ {n} file(s) would be rejected when mounting the .gma (enable auto-strip)"},
+    'whitelist_stripped_total': {'fr': "  🗑 {n} fichier(s) hors whitelist retiré(s)", 'en': "  🗑 {n} non-whitelisted file(s) stripped"},
+
     # Audit des textures
     'audit_header':        {'fr': "  ── Audit des textures ──", 'en': "  ── Texture audit ──"},
     'audit_oversized':     {'fr': "  ⚠ Surdimensionnée : {path} ({detail})", 'en': "  ⚠ Oversized: {path} ({detail})"},
@@ -195,7 +214,14 @@ STRINGS: dict[str, dict[str, str]] = {
     'radio_folder':        {'fr': "Dossier", 'en': "Folder"},
     'radio_gma_file':      {'fr': "Fichier .gma", 'en': ".gma file"},
     'label_output_format': {'fr': "Format sortie :", 'en': "Output format:"},
-    'drop_hint':           {'fr': "  (glissez-déposez un dossier ou .gma ici)", 'en': "  (drag & drop a folder or .gma here)"},
+
+    # Zone de dépôt
+    'drop_title':       {'fr': "Déposez un dossier d'addon ou un fichier .gma ici", 'en': "Drop an addon folder or a .gma file here"},
+    'drop_title_nodnd': {'fr': "Sélectionnez un dossier d'addon ou un fichier .gma", 'en': "Select an addon folder or a .gma file"},
+    'drop_or':          {'fr': "…ou cliquez pour parcourir", 'en': "…or click to browse"},
+    'drop_change_hint': {'fr': "Cliquez ou déposez pour changer de source", 'en': "Click or drop to change source"},
+    'stats_breakdown':  {'fr': "{tex} texture(s) • {snd} son(s) • {mdl} modèle(s)", 'en': "{tex} texture(s) • {snd} sound(s) • {mdl} model(s)"},
+    'no_recent':        {'fr': "(aucune source récente)", 'en': "(no recent source)"},
 
     'dialog_select_gma':    {'fr': "Sélectionner un fichier GMA", 'en': "Select a GMA file"},
     'dialog_select_folder': {'fr': "Sélectionner le dossier de l'addon", 'en': "Select the addon folder"},
@@ -247,12 +273,9 @@ STRINGS: dict[str, dict[str, str]] = {
     'label_zip_level':    {'fr': "Niveau de compression ZIP :", 'en': "ZIP compression level:"},
     'zip_fast':           {'fr': "Rapide", 'en': "Fast"},
     'zip_max':            {'fr': "Max", 'en': "Max"},
-    'libs_detected':      {'fr': "Bibliothèques détectées :", 'en': "Detected libraries:"},
     'lib_pillow':         {'fr': "Pillow (.png/.jpg/.tga)", 'en': "Pillow (.png/.jpg/.tga)"},
     'lib_vtflib':         {'fr': "vtflib (.vtf natif)", 'en': "vtflib (native .vtf)"},
     'lib_ffmpeg':         {'fr': "ffmpeg (sons)", 'en': "ffmpeg (sounds)"},
-    'vtf_note':           {'fr': "\nSans vtflib, les .vtf sont réduits par\ntroncature de mipmaps (résolution\nmax respectée, sans dépendance).",
-                            'en': "\nWithout vtflib, .vtf files are reduced\nvia mipmap truncation (max resolution\nrespected, no dependency)."},
 
     # Nouvelles options (onglet Avancé)
     'chk_check_materials': {'fr': "Vérifier les matériaux/textures manquants", 'en': "Check for missing materials/textures"},
@@ -269,7 +292,27 @@ STRINGS: dict[str, dict[str, str]] = {
     'progress_section': {'fr': " 📊 Progression ", 'en': " 📊 Progress "},
     'status_ready':     {'fr': "Prêt", 'en': "Ready"},
 
+    # Pastilles d'étapes (indicateur de progression)
+    'step_chip_1': {'fr': "C-Hands",   'en': "C-Hands"},
+    'step_chip_2': {'fr': "Inutiles",  'en': "Junk"},
+    'step_chip_3': {'fr': "Matériaux", 'en': "Materials"},
+    'step_chip_4': {'fr': "Textures",  'en': "Textures"},
+    'step_chip_5': {'fr': "Sons",      'en': "Sounds"},
+    'step_chip_6': {'fr': "Lua",       'en': "Lua"},
+    'step_chip_7': {'fr': "Écriture",  'en': "Write"},
+
     'log_section': {'fr': " 📜 Journal ", 'en': " 📜 Log "},
+
+    # Barre d'outils du journal
+    'log_filter_all':  {'fr': "Tout", 'en': "All"},
+    'log_filter_warn': {'fr': "⚠ Avertissements", 'en': "⚠ Warnings"},
+    'log_filter_err':  {'fr': "✗ Erreurs", 'en': "✗ Errors"},
+    'btn_copy_log':    {'fr': "📋 Copier", 'en': "📋 Copy"},
+    'btn_save_log':    {'fr': "💾 Enregistrer", 'en': "💾 Save"},
+    'log_copied':      {'fr': "Journal copié dans le presse-papiers", 'en': "Log copied to clipboard"},
+    'log_saved':       {'fr': "✓ Journal enregistré : {path}", 'en': "✓ Log saved: {path}"},
+    'dialog_save_log': {'fr': "Enregistrer le journal", 'en': "Save log"},
+    'filetype_log':    {'fr': "Fichiers texte", 'en': "Text files"},
 
     'btn_clear_log':   {'fr': "🗑 Effacer journal", 'en': "🗑 Clear log"},
     'btn_open_output': {'fr': "📂 Ouvrir le dossier de sortie", 'en': "📂 Open output folder"},
@@ -277,6 +320,37 @@ STRINGS: dict[str, dict[str, str]] = {
     'btn_run':         {'fr': "▶  Compresser  ", 'en': "▶  Compress  "},
     'btn_theme_light': {'fr': "☀ Thème clair", 'en': "☀ Light theme"},
     'btn_theme_dark':  {'fr': "🌙 Thème sombre", 'en': "🌙 Dark theme"},
+    'shortcuts_hint':  {'fr': "Raccourcis :  Ctrl+O source  •  Ctrl+Entrée compresser  •  Échap annuler",
+                        'en': "Shortcuts:  Ctrl+O source  •  Ctrl+Enter compress  •  Esc cancel"},
+
+    # Nouvelles options
+    'chk_dedup':            {'fr': "Fusionner les textures identiques", 'en': "Merge identical textures"},
+    'desc_dedup':           {'fr': "  Réécrit les .vmt vers une copie unique (sans perte)", 'en': "  Rewrites .vmt files to a single copy (lossless)"},
+    'chk_strip_whitelist':  {'fr': "Retirer les fichiers refusés par GMod (.gma)", 'en': "Strip files GMod rejects (.gma)"},
+    'desc_strip_whitelist': {'fr': "  Whitelist GMA : évite un addon qui ne monte pas", 'en': "  GMA whitelist: avoids an addon that fails to mount"},
+
+    # Info-bulles
+    'tip_profile':           {'fr': "Applique un jeu de réglages prédéfini. « Personnalisé » ne touche à rien.", 'en': "Applies a predefined settings set. “Custom” changes nothing."},
+    'tip_recent':            {'fr': "Sources récentes", 'en': "Recent sources"},
+    'tip_chands':            {'fr': "Supprime les modèles de bras à la 1ʳᵉ personne (c_arms). Inutiles si l'addon n'est qu'un playermodel.", 'en': "Removes first-person arm models (c_arms). Useless if the addon is only a playermodel."},
+    'tip_unused':            {'fr': "Supprime la documentation et les fichiers sources (.txt, .psd, .log…) inutiles en jeu.", 'en': "Removes documentation and source files (.txt, .psd, .log…) useless in game."},
+    'tip_check_materials':   {'fr': "Analyse complète : textures manquantes, rôles, orphelins, doublons, audit qualité.", 'en': "Full analysis: missing textures, roles, orphans, duplicates, quality audit."},
+    'tip_remove_unused_tex': {'fr': "Supprime les .vtf qu'aucun .vmt ne référence et les .vmt qu'aucun modèle n'utilise.", 'en': "Removes .vtf files no .vmt references and .vmt files no model uses."},
+    'tip_dedup':             {'fr': "Détecte les textures au contenu strictement identique, n'en garde qu'une et réécrit les matériaux. Aucune perte visuelle.", 'en': "Finds byte-identical textures, keeps a single copy and rewrites materials. No visual loss."},
+    'tip_textures':          {'fr': "Réduit la résolution et recompresse les textures (.vtf nativement, .png/.jpg/.tga via Pillow).", 'en': "Downscales and recompresses textures (.vtf natively, .png/.jpg/.tga via Pillow)."},
+    'tip_max_res':           {'fr': "Les textures plus grandes sont réduites à cette taille. 1024 px est invisible en jeu pour un playermodel.", 'en': "Larger textures are downscaled to this size. 1024 px is unnoticeable in game for a playermodel."},
+    'tip_quality':           {'fr': "Qualité de recompression des images .png/.jpg. N'affecte pas les .vtf.", 'en': "Recompression quality for .png/.jpg images. Does not affect .vtf files."},
+    'tip_lua':               {'fr': "Crée le fichier lua/autorun qui enregistre le playermodel dans le menu (AddValidModel).", 'en': "Creates the lua/autorun file that registers the playermodel in the menu (AddValidModel)."},
+    'tip_lua_chands':        {'fr': "Associe les c_hands au modèle via player_manager.AddValidHands.", 'en': "Binds the c_hands to the model via player_manager.AddValidHands."},
+    'tip_sounds':            {'fr': "Ré-encode les sons dans leur format d'origine (bitrate réduit). Nécessite ffmpeg.", 'en': "Re-encodes sounds in their original format (lower bitrate). Requires ffmpeg."},
+    'tip_zip':               {'fr': "Niveau de compression de l'archive .zip (1 rapide → 9 maximum).", 'en': "Compression level of the .zip archive (1 fast → 9 maximum)."},
+    'tip_dry_run':           {'fr': "Simule toute la compression et affiche le résultat sans écrire un seul fichier.", 'en': "Simulates the whole compression and shows the result without writing a single file."},
+    'tip_backup':            {'fr': "Copie horodatée de la sortie existante avant de l'écraser.", 'en': "Timestamped copy of the existing output before overwriting it."},
+    'tip_convert':           {'fr': "Convertit les .vtf stockés sans compression (RGBA8888…) en DXT, 4 à 6× plus légers. Nécessite vtflib.", 'en': "Converts uncompressed .vtf files (RGBA8888…) to DXT, 4–6× smaller. Requires vtflib."},
+    'tip_report':            {'fr': "Génère un rapport HTML autonome : synthèse, rôles des textures, orphelins, doublons, audit.", 'en': "Generates a standalone HTML report: summary, texture roles, orphans, duplicates, audit."},
+    'tip_target_size':       {'fr': "Essaie plusieurs combinaisons résolution/qualité jusqu'à passer sous la taille visée.", 'en': "Tries several resolution/quality combinations until the output fits the target size."},
+    'tip_batch':             {'fr': "La source doit contenir plusieurs sous-dossiers ou .gma : chacun est compressé séparément.", 'en': "The source must contain several subfolders or .gma files: each is compressed separately."},
+    'tip_strip_whitelist':   {'fr': "GMod refuse de monter un .gma contenant des fichiers hors whitelist. Cette option les retire automatiquement.", 'en': "GMod refuses to mount a .gma containing non-whitelisted files. This option strips them automatically."},
 
     'msg_source_missing_title':   {'fr': "Source manquante", 'en': "Missing source"},
     'msg_source_missing_body':    {'fr': "Veuillez sélectionner un dossier ou fichier source.", 'en': "Please select a source folder or file."},
@@ -292,7 +366,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'summary_title':   {'fr': "Compression terminée 🎉", 'en': "Compression complete 🎉"},
     'summary_body':    {'fr': "Avant :   {before}\nAprès :   {after}\nGagné :   {saved}  (-{pct}%)",
                         'en': "Before:  {before}\nAfter:   {after}\nSaved:   {saved}  (-{pct}%)"},
-    'summary_open_q':  {'fr': "Ouvrir le dossier de sortie ?", 'en': "Open the output folder?"},
+    'summary_elapsed': {'fr': "Durée :   {dur}", 'en': "Elapsed:  {dur}"},
     'summary_open_folder': {'fr': "📂 Ouvrir le dossier", 'en': "📂 Open folder"},
     'summary_close':   {'fr': "Fermer", 'en': "Close"},
     'summary_dry_run': {'fr': "Mode aperçu : aucun fichier n'a réellement été écrit.", 'en': "Dry-run mode: no file was actually written."},

@@ -21,7 +21,7 @@ if errorlevel 1 (
 )
 
 echo [2/3] Construction de l'executable...
-python -m PyInstaller --onefile --windowed --name "Compressez-PM-GMod" compressez_pm.py
+python -m PyInstaller --onefile --windowed --name "Compressez-PM-GMod" --collect-all tkinterdnd2 compressez_pm.py
 if errorlevel 1 (
     echo ERREUR lors de la construction.
     pause

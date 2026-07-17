@@ -15,23 +15,29 @@ Disponible en **interface graphique** (GUI) et en **ligne de commande** (CLI).
 | **Rôle des textures** | Classe chaque texture par usage (tête, casque, corps, yeux, mains, cartes normales…) |
 | **Graphe de dépendances** | Lit les `.mdl` pour relier modèles → `.vmt` → `.vtf` et repérer les orphelins |
 | **Supprimer les textures inutilisées** | Repère les `.vtf`/`.vmt` orphelins et peut les supprimer |
-| **Détection de doublons** | Signale les textures au contenu strictement identique |
+| **Fusion des doublons (dédup)** | Fusionne les textures identiques en une copie unique et réécrit les `.vmt` — sans perte |
+| **Whitelist GMA** | Signale (ou retire) les fichiers que GMod refuserait au montage du `.gma` |
 | **Audit qualité** | Repère les textures surdimensionnées, non compressées ou non puissance de 2 |
 | **Recompression DXT** | Convertit les `.vtf` RGBA/BGR volumineux en DXT (avec vtflib) |
 | **Rapport HTML** | Récapitulatif visuel autonome (rôles, orphelins, doublons, audit) |
-| **Optimiser les textures** | Redimensionne et recompresse `.vtf`, `.png`, `.jpg`, `.tga` |
+| **Optimiser les textures** | Redimensionne et recompresse `.vtf`, `.png`, `.jpg`, `.tga` — en parallèle (multi-thread) |
 | **Résolution max des textures** | 256 / 512 / 1024 / 2048 / Aucune limite |
 | **Qualité des textures** | Curseur de 10 % à 100 % |
 | **Taille cible** | Ajuste automatiquement résolution/qualité pour atteindre une taille max donnée |
-| **Compresser les sons** | Re-encode en MP3 via ffmpeg |
+| **Compresser les sons** | Ré-encode chaque son dans son format d'origine via ffmpeg (les chemins Lua restent valides) |
+| **`addon.json` automatique** | Généré s'il manque en sortie dossier (requis par gmad) |
 | **Niveau de compression ZIP** | 1 (rapide) à 9 (maximum) |
 | **Mode aperçu (dry-run)** | Affiche les changements sans rien écrire sur le disque |
 | **Sauvegarde de l'original** | Crée une copie horodatée de la sortie avant écrasement |
 | **Mode batch** | Traite plusieurs addons (sous-dossiers/.gma) en une seule fois |
-| **Glisser-déposer** | Déposez un dossier ou un `.gma` dans la fenêtre (GUI) |
+| **Zone de dépôt** | Déposez un dossier ou un `.gma` (ou cliquez) — composition affichée (textures/sons/modèles) |
+| **Suivi visuel** | Indicateur d'étapes 1→7, chronomètre, journal filtrable (copier/enregistrer) |
+| **Sources récentes** | Historique persistant des derniers addons traités |
+| **Raccourcis clavier** | Ctrl+O source • Ctrl+Entrée compresser • Échap annuler |
+| **Info-bulles** | Explication au survol de chaque option (FR/EN) |
 | **Thème clair / sombre** | Bascule depuis l'en-tête de la GUI |
 | **Multilingue FR / EN** | Bascule la langue de l'interface et des messages |
-| **Récapitulatif de fin** | Fenêtre de résumé (avant → après, espace gagné) avec ouverture directe du dossier |
+| **Récapitulatif de fin** | Barres avant/après, durée, accès direct au dossier et au rapport HTML |
 | **À propos** | Version, licence et bibliothèques détectées depuis l'en-tête |
 | **Tolérance aux fichiers corrompus** | Une texture illisible est ignorée avec un avertissement, sans interrompre la compression |
 
@@ -96,7 +102,10 @@ source output               Chemins source et sortie
 --no-lua-chands             Ne pas inclure les C-Hands dans le Lua généré
 --no-check-materials        Ne pas vérifier les matériaux/textures manquants
 --remove-unused-textures    Supprimer les .vtf référencés par aucun .vmt
+--dedup-textures            Fusionner les textures identiques (réécrit les .vmt)
+--strip-non-whitelisted     Retirer les fichiers refusés par la whitelist GMA
 --no-convert-uncompressed   Ne pas recompresser les .vtf non compressés en DXT
+--no-addon-json             Ne pas générer addon.json s'il manque (sortie dossier)
 --no-report                 Ne pas générer le rapport HTML d'analyse
 --target-size MO            Taille cible en Mo (ajuste résolution/qualité automatiquement)
 --dry-run                   Mode aperçu : affiche les changements sans rien écrire
@@ -147,7 +156,9 @@ pytest -q
 ```
 
 Les tests couvrent le moteur d'analyse (parsing `.mdl`/`.vmt`/`.vtf`, graphe de
-dépendances, doublons, audit, rapport HTML) sans nécessiter d'interface graphique.
+dépendances, doublons, dédup, whitelist GMA, audit, rapport HTML), le
+round-trip `.gma` et la génération Lua — sans nécessiter d'interface graphique.
+La CI exécute la suite avant chaque build de l'exécutable Windows.
 
 ---
 
