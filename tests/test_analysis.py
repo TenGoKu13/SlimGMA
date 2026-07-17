@@ -198,3 +198,138 @@ def test_classify_roles():
     assert C._classify_texture_role('materials/x/casque.vtf') == 'role_helmet'
     assert C._classify_texture_role('materials/x/body_normal.vtf') == 'role_normalmap'
     assert C._classify_texture_role('materials/x/eye_glow.vtf') == 'role_eye_effect'
+
+
+# ─── Whitelist GMA ──────────────────────────────────────────────────────────
+
+def test_whitelist_accepts_standard_addon_files():
+    for path in (
+        'lua/autorun/sh_pm.lua',
+        'lua/a/b/c/deep.lua',
+        'models/player/bob.mdl',
+        'models/player/bob.dx90.vtx',
+        'materials/models/bob/head.vtf',
+        'materials/models/bob/head.vmt',
+        'sound/bob/hello.wav',
+        'addon.json',
+    ):
+        assert m.is_gma_whitelisted(path), path
+
+
+def test_whitelist_rejects_junk():
+    for path in (
+        'readme.txt',
+        'source.psd',
+        'stray.blend',
+        'materials/notes.txt',
+        'models/raw.blend',
+    ):
+        assert not m.is_gma_whitelisted(path), path
+
+
+def test_check_gma_whitelist_lists_offenders():
+    files = {
+        'lua/autorun/ok.lua': b'',
+        'bad.blend': b'',
+        '__meta__': b'{}',
+    }
+    assert m.check_gma_whitelist(files) == ['bad.blend']
+
+
+# ─── Déduplication des textures ─────────────────────────────────────────────
+
+def test_dedup_prefers_referenced_copy_and_rewrites_vmt():
+    same = make_vtf(512, 512)
+    files = {
+        'materials/models/x/head.vmt': vmt('models/x/head'),
+        'materials/models/x/zz_dup.vmt': vmt('models/x/zz_dup'),
+        'materials/models/x/head.vtf': same,
+        'materials/models/x/zz_dup.vtf': same,
+    }
+    result = m.dedup_textures(files)
+
+    # La copie référencée en premier (ordre alphabétique) est conservée…
+    assert result['removed'] == ['materials/models/x/zz_dup.vtf']
+    assert 'materials/models/x/zz_dup.vtf' not in files
+    assert 'materials/models/x/head.vtf' in files
+    # …et le .vmt qui pointait vers le doublon est réécrit vers elle.
+    assert result['rewritten_vmt'] == ['materials/models/x/zz_dup.vmt']
+    rewritten = files['materials/models/x/zz_dup.vmt'].decode()
+    assert 'models/x/head' in rewritten
+    assert 'zz_dup' not in rewritten.replace('zz_dup.vmt', '')
+    assert result['saved'] == len(same)
+
+
+def test_dedup_orphan_duplicate_merged_without_rewrite():
+    same = make_vtf(256, 256)
+    files = {
+        'materials/models/x/head.vmt': vmt('models/x/head'),
+        'materials/models/x/head.vtf': same,
+        'materials/models/x/copy.vtf': same,    # orphelin, non référencé
+    }
+    result = m.dedup_textures(files)
+    assert result['removed'] == ['materials/models/x/copy.vtf']
+    assert result['rewritten_vmt'] == []
+    assert 'materials/models/x/head.vtf' in files
+
+
+def test_dedup_no_duplicates_is_noop():
+    files = {
+        'materials/a.vtf': make_vtf(64, 64),
+        'materials/b.vtf': make_vtf(128, 128),
+    }
+    before = dict(files)
+    result = m.dedup_textures(files)
+    assert result['removed'] == [] and result['saved'] == 0
+    assert files == before
+
+
+# ─── Génération Lua ─────────────────────────────────────────────────────────
+
+def _dummy_compressor(opts=None) -> 'm.Compressor':
+    base = {'lang': 'fr', 'lua_chands': True}
+    base.update(opts or {})
+    return m.Compressor(base, log_fn=lambda _m: None,
+                        progress_fn=lambda _v: None, status_fn=lambda _s: None)
+
+
+def test_generate_lua_uses_valid_gmod_api():
+    files = {
+        'models/player/bob.mdl': b'',
+        'models/weapons/c_arms_bob.mdl': b'',
+    }
+    _dummy_compressor()._generate_lua(files, 'bob_addon')
+
+    lua_path = 'lua/autorun/sh_bob_addon_pm.lua'
+    assert lua_path in files
+    lua = files[lua_path].decode()
+    assert 'player_manager.AddValidModel' in lua
+    assert 'list.Set("PlayerOptionsModel"' in lua
+    assert 'player_manager.AddValidHands' in lua
+    assert 'models/weapons/c_arms_bob.mdl' in lua
+    # Régression : cette méthode n'existe pas dans l'API GMod.
+    assert 'GetBodygroupsString' not in lua
+
+
+def test_generate_lua_without_chands():
+    files = {'models/player/bob.mdl': b''}
+    _dummy_compressor()._generate_lua(files, 'bob')
+    lua = files['lua/autorun/sh_bob_pm.lua'].decode()
+    assert 'AddValidModel' in lua
+    assert 'AddValidHands' not in lua
+
+
+# ─── Divers ─────────────────────────────────────────────────────────────────
+
+def test_fmt_size():
+    fmt = m.Compressor._fmt_size
+    assert fmt(0) == '0 o'
+    assert fmt(512) == '512 o'
+    assert fmt(2048) == '2.0 Ko'
+    assert fmt(5 * 1024 * 1024) == '5.0 Mo'
+
+
+def test_sound_encoders_keep_extension():
+    encoders = m.Compressor._SOUND_ENCODERS
+    assert set(encoders) == {'.mp3', '.ogg', '.wav'}   # jamais de renommage
+

@@ -61,8 +61,16 @@ Exemples :
                              "la source comme un addon distinct")
     parser.add_argument('--remove-unused-textures', action='store_true',
                         help="Supprimer les textures .vtf référencées par aucun .vmt")
+    parser.add_argument('--dedup-textures', action='store_true',
+                        help="Fusionner les textures .vtf identiques "
+                             "(réécrit les .vmt vers une copie unique)")
+    parser.add_argument('--strip-non-whitelisted', action='store_true',
+                        help="Retirer les fichiers refusés par la whitelist GMA "
+                             "(sortie .gma uniquement)")
     parser.add_argument('--no-convert-uncompressed', action='store_true',
                         help="Ne pas recompresser les .vtf non compressés en DXT")
+    parser.add_argument('--no-addon-json', action='store_true',
+                        help="Ne pas générer addon.json s'il manque (sortie dossier)")
     parser.add_argument('--no-report', action='store_true',
                         help="Ne pas générer le rapport HTML d'analyse")
     parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
@@ -87,7 +95,10 @@ Exemples :
         'lua_chands':        not args.no_lua_chands,
         'check_materials':   not args.no_check_materials,
         'remove_unused_textures': args.remove_unused_textures,
+        'dedup_textures':    args.dedup_textures,
+        'strip_non_whitelisted': args.strip_non_whitelisted,
         'convert_uncompressed': not args.no_convert_uncompressed,
+        'gen_addon_json':    not args.no_addon_json,
         'gen_report':        not args.no_report,
         'target_size_mb':    args.target_size,
         'dry_run':           args.dry_run,

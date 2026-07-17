@@ -2,12 +2,13 @@
 
 Fonctions pures, testables sans GUI ni classe Compressor.
 """
+import fnmatch
 import re
 import struct
 from pathlib import Path
 
 from .constants import (
-    VMT_TEXTURE_KEYS, VTF_FORMAT_SIZES, TEXTURE_EXTENSIONS,
+    VMT_TEXTURE_KEYS, VTF_FORMAT_SIZES, TEXTURE_EXTENSIONS, GMA_WHITELIST,
 )
 
 
@@ -209,6 +210,102 @@ VTF_UNCOMPRESSED_FORMATS = {
     'RGBA8888', 'ABGR8888', 'ARGB8888', 'BGRA8888', 'BGRX8888',
     'RGB888', 'BGR888', 'UVLX8888',
 }
+
+
+def is_gma_whitelisted(path: str) -> bool:
+    """Vrai si le chemin serait accepté par Garry's Mod dans un .gma.
+
+    Reproduit le wildcard de gmad : `*` matche n'importe quoi, y compris `/`."""
+    key = norm_key(path)
+    return any(fnmatch.fnmatchcase(key, pat) for pat in GMA_WHITELIST)
+
+
+def check_gma_whitelist(files: dict) -> list[str]:
+    """Liste (triée) des fichiers que GMod refuserait au montage du .gma."""
+    return sorted(k for k in files
+                  if k != '__meta__' and not is_gma_whitelisted(k))
+
+
+def _vtf_ref_form(vtf_key: str) -> str:
+    """Chemin .vtf -> forme de référence VMT (`materials/x/y.vtf` -> `x/y`)."""
+    ref = vtf_key
+    if ref.startswith('materials/'):
+        ref = ref[len('materials/'):]
+    if ref.endswith('.vtf'):
+        ref = ref[:-4]
+    return ref
+
+
+def dedup_textures(files: dict) -> dict:
+    """Fusionne les .vtf strictement identiques en réécrivant les .vmt.
+
+    Pour chaque groupe de doublons, une seule copie est conservée ; toutes les
+    références des .vmt vers les autres copies sont réécrites vers celle-ci,
+    puis les copies supprimées. Modifie `files` en place.
+
+    Renvoie {'removed': [...], 'kept': {dup: kept}, 'rewritten_vmt': [...],
+             'saved': octets}."""
+    # Textures déjà référencées par un .vmt : on privilégie leur chemin comme
+    # copie conservée pour minimiser les réécritures.
+    referenced: set[str] = set()
+    for vk in (k for k in files if k.endswith('.vmt')):
+        try:
+            text = files[vk].decode('utf-8', errors='replace')
+        except Exception:
+            continue
+        referenced.update(parse_vmt_refs(text).values())
+
+    dup_map: dict[str, str] = {}   # doublon -> copie conservée
+    for group in find_duplicate_textures(files):
+        vtf_group = [p for p in group if p.endswith('.vtf')]
+        if len(vtf_group) < 2:
+            continue
+        kept = next((p for p in vtf_group if p in referenced), vtf_group[0])
+        for dup in vtf_group:
+            if dup != kept:
+                dup_map[dup] = kept
+
+    if not dup_map:
+        return {'removed': [], 'kept': {}, 'rewritten_vmt': [], 'saved': 0}
+
+    rewritten: list[str] = []
+    for vk in [k for k in files if k.endswith('.vmt')]:
+        try:
+            text = files[vk].decode('utf-8', errors='replace')
+        except Exception:
+            continue
+        pieces: list[str] = []
+        last = 0
+        changed = False
+        for m in _VMT_KV_RE.finditer(text):
+            if m.group(1).lower() not in VMT_TEXTURE_KEYS:
+                continue
+            resolved = resolve_material_ref(m.group(2))
+            kept = dup_map.get(resolved)
+            if kept is None:
+                continue
+            start, end = m.span(2)
+            pieces.append(text[last:start])
+            pieces.append(_vtf_ref_form(kept))
+            last = end
+            changed = True
+        if changed:
+            pieces.append(text[last:])
+            files[vk] = ''.join(pieces).encode('utf-8')
+            rewritten.append(vk)
+
+    saved = 0
+    for dup in dup_map:
+        data = files.pop(dup, None)
+        if data is not None:
+            saved += len(data)
+
+    return {
+        'removed': sorted(dup_map),
+        'kept': dict(dup_map),
+        'rewritten_vmt': sorted(rewritten),
+        'saved': saved,
+    }
 
 
 def audit_textures(files: dict, max_res: int | None = 1024) -> list[dict]:
