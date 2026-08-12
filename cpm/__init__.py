@@ -1,17 +1,3 @@
-"""Compressez PM GMod — package.
-
-Outil de compression d'addons Playermodel pour Garry's Mod.
-Le code est découpé en modules :
-  deps        dépendances optionnelles (Pillow, vtflib, ffmpeg)
-  constants   constantes globales
-  i18n        traductions FR/EN
-  gma         lecteur/écrivain .gma
-  analysis    moteur d'analyse (pur, testable)
-  report      rapport HTML
-  compressor  logique de compression
-  gui         interface graphique tkinter
-  cli         point d'entrée ligne de commande
-"""
 from .constants import VERSION
 from .i18n import STRINGS, t
 from .gma import GMAFile

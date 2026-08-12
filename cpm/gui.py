@@ -1,15 +1,16 @@
-"""Interface graphique (tkinter)."""
 import os
 import sys
 import json
+import queue
 import subprocess
 import threading
 import time
+import webbrowser
 from pathlib import Path
 
 try:
     import tkinter as tk
-    from tkinter import ttk, filedialog, scrolledtext, messagebox
+    from tkinter import ttk, filedialog, messagebox
     TK_AVAILABLE = True
 except ImportError:
     TK_AVAILABLE = False
@@ -21,39 +22,48 @@ except ImportError:
     DND_AVAILABLE = False
 
 from .deps import PIL_AVAILABLE, VTFLIB_AVAILABLE, FFMPEG_AVAILABLE
-from .constants import VERSION, CONFIG_PATH, TEXTURE_EXTENSIONS, SOUND_EXTENSIONS
+from .constants import (
+    VERSION, LICENSE_NAME, REPO_URL, CONFIG_PATH,
+    TEXTURE_EXTENSIONS, SOUND_EXTENSIONS,
+)
 from .i18n import t
 from .compressor import Compressor
 
 
 THEMES = {
     'dark': {
-        'BG': '#1e1e2e', 'FG': '#cdd6f4', 'ACCENT': '#89b4fa', 'SUB': '#6c7086',
-        'SURFACE': '#313244', 'GREEN': '#a6e3a1', 'RED': '#f38ba8', 'YELLOW': '#f9e2af',
-        'LOG_BG': '#11111b', 'ACCENT_ACTIVE': '#74c7ec', 'BTN_ACTIVE': '#45475a',
+        'BG': '#12141c', 'CARD': '#1b1f2a', 'SIDEBAR': '#0c0e15',
+        'BORDER': '#2a3040', 'FG': '#e6e9f0', 'SUB': '#8b93a7',
+        'ACCENT': '#6d8cff', 'ACCENT_ACTIVE': '#8aa4ff', 'ON_ACCENT': '#0c0e15',
+        'GREEN': '#3ddc97', 'RED': '#ff6b81', 'YELLOW': '#ffc857',
+        'LOG_BG': '#0a0c12', 'HOVER': '#232838',
     },
     'light': {
-        'BG': '#eff1f5', 'FG': '#4c4f69', 'ACCENT': '#1e66f5', 'SUB': '#8c8fa1',
-        'SURFACE': '#ccd0da', 'GREEN': '#40a02b', 'RED': '#d20f39', 'YELLOW': '#df8e1d',
-        'LOG_BG': '#e6e9ef', 'ACCENT_ACTIVE': '#7287fd', 'BTN_ACTIVE': '#bcc0cc',
+        'BG': '#f5f7fb', 'CARD': '#ffffff', 'SIDEBAR': '#dde3ef',
+        'BORDER': '#c9d1e2', 'FG': '#1b2130', 'SUB': '#5f6980',
+        'ACCENT': '#3559e0', 'ACCENT_ACTIVE': '#5573e8', 'ON_ACCENT': '#ffffff',
+        'GREEN': '#0f9d63', 'RED': '#d92d4b', 'YELLOW': '#a9700a',
+        'LOG_BG': '#ffffff', 'HOVER': '#d7dde9',
     },
 }
 
 MAX_RECENT_SOURCES = 8
+UI_PUMP_MS = 40
+SIDEBAR_WIDTH = 186
+PAGES = ('source', 'options', 'advanced', 'log')
+PAGE_ICONS = {'source': '📦', 'options': '⚙', 'advanced': '🛠', 'log': '📜'}
 
 
 class Tooltip:
-    """Info-bulle légère affichée au survol d'un widget."""
-
-    def __init__(self, widget, text_fn, bg: str, fg: str):
+    def __init__(self, widget, text_fn, bg: str, fg: str, border: str):
         self.widget = widget
-        self.text_fn = text_fn          # callable -> str (suit la langue active)
+        self.text_fn = text_fn
         self.tip = None
         self.after_id = None
+        self.bg, self.fg, self.border = bg, fg, border
         widget.bind('<Enter>', self._schedule, add='+')
         widget.bind('<Leave>', self._hide, add='+')
         widget.bind('<ButtonPress>', self._hide, add='+')
-        self.bg, self.fg = bg, fg
 
     def _schedule(self, _event=None):
         self._cancel()
@@ -75,13 +85,15 @@ class Tooltip:
             return
         try:
             x = self.widget.winfo_rootx() + 14
-            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
             self.tip = tw = tk.Toplevel(self.widget)
             tw.wm_overrideredirect(True)
             tw.wm_geometry(f'+{x}+{y}')
-            tk.Label(tw, text=text, bg=self.bg, fg=self.fg, justify='left',
-                     relief='solid', borderwidth=1, padx=7, pady=4,
-                     font=('Segoe UI', 8), wraplength=340).pack()
+            frame = tk.Frame(tw, bg=self.border, padx=1, pady=1)
+            frame.pack()
+            tk.Label(frame, text=text, bg=self.bg, fg=self.fg, justify='left',
+                     padx=9, pady=6, font=('Segoe UI', 8),
+                     wraplength=340).pack()
         except tk.TclError:
             self.tip = None
 
@@ -95,9 +107,45 @@ class Tooltip:
             self.tip = None
 
 
-class App:
+class ScrollArea:
+    def __init__(self, parent, bg: str):
+        self.outer = tk.Frame(parent, bg=bg)
+        self.canvas = tk.Canvas(self.outer, bg=bg, highlightthickness=0)
+        self.vbar = ttk.Scrollbar(self.outer, orient='vertical',
+                                  command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vbar.set)
+        self.canvas.pack(side='left', fill='both', expand=True)
+        self.inner = tk.Frame(self.canvas, bg=bg)
+        self.window = self.canvas.create_window((0, 0), window=self.inner,
+                                                anchor='nw')
+        self.inner.bind('<Configure>', self._on_inner)
+        self.canvas.bind('<Configure>', self._on_canvas)
 
-    # Profils rapides : ajustent automatiquement les options ci-dessous
+    def _on_inner(self, _event=None):
+        self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+        self._sync_bar()
+
+    def _on_canvas(self, event):
+        self.canvas.itemconfigure(self.window, width=event.width)
+        self._sync_bar()
+
+    def _sync_bar(self):
+        try:
+            overflow = self.inner.winfo_reqheight() > self.canvas.winfo_height()
+        except tk.TclError:
+            return
+        if overflow and not self.vbar.winfo_ismapped():
+            self.vbar.pack(side='right', fill='y')
+        elif not overflow and self.vbar.winfo_ismapped():
+            self.vbar.pack_forget()
+            self.canvas.yview_moveto(0)
+
+    def scroll(self, units: int):
+        if self.inner.winfo_reqheight() > self.canvas.winfo_height():
+            self.canvas.yview_scroll(units, 'units')
+
+
+class App:
     PRESETS: dict[str, dict | None] = {
         'custom': None,
         'balanced': {
@@ -134,18 +182,24 @@ class App:
 
         self.root = TkinterDnD.Tk() if DND_AVAILABLE else tk.Tk()
         self.root.title(f"Compressez PM GMod  v{VERSION}")
-        self.root.geometry("880x900")
+        self.root.geometry("1000x760")
         self.root.configure(bg=self.BG)
-        self.root.resizable(True, True)
-        self.root.minsize(720, 700)
+        self.root.minsize(880, 620)
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
+        self._ui_queue: queue.SimpleQueue = queue.SimpleQueue()
+        self._pump_job = None
         self._compressor: Compressor | None = None
         self._thread: threading.Thread | None = None
-        self._log_entries: list[tuple[str, str]] = []   # (message, tag)
+        self._log_entries: list[tuple[str, str]] = []
+        self._counts = {'warning': 0, 'error': 0}
         self._drop_stats_line = ""
         self._run_started: float | None = None
         self._timer_job = None
+        self._page = saved.get('page', 'source')
+        self._log_filter = 'all'
+        self._step_state = 0
+        self._steps_done = False
 
         self._setup_styles()
         self._build_ui()
@@ -153,132 +207,360 @@ class App:
             self._restore_state(saved)
         self._log_header()
         self._bind_shortcuts()
-
-    # ── Internationalisation / thème ──────────────────────────────────────────
+        self._pump_ui()
 
     def t(self, key: str, **kwargs) -> str:
         return t(key, self.lang, **kwargs)
 
     def _apply_palette(self):
-        palette = THEMES[self.theme_name]
-        for k, v in palette.items():
+        for k, v in THEMES[self.theme_name].items():
             setattr(self, k, v)
 
     def _profile_label(self, pid: str) -> str:
         return self.t(f'profile_{pid}')
 
     def _ui(self, fn):
-        """Planifie `fn` sur le thread UI ; silencieux si la fenêtre est fermée
-        pendant que le thread de compression tourne encore."""
+        self._ui_queue.put(fn)
+
+    def _pump_ui(self):
+        while True:
+            try:
+                fn = self._ui_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                fn()
+            except tk.TclError:
+                pass
         try:
-            self.root.after(0, fn)
+            self._pump_job = self.root.after(UI_PUMP_MS, self._pump_ui)
         except (RuntimeError, tk.TclError):
-            pass
+            self._pump_job = None
+
+    def _stop_pump(self):
+        if self._pump_job is not None:
+            try:
+                self.root.after_cancel(self._pump_job)
+            except Exception:
+                pass
+            self._pump_job = None
 
     def _tooltip(self, widget, key: str):
-        Tooltip(widget, lambda k=key: self.t(k), bg=self.SURFACE, fg=self.FG)
-
-    # ── Styles ───────────────────────────────────────────────────────────────
+        Tooltip(widget, lambda k=key: self.t(k), bg=self.CARD, fg=self.FG,
+                border=self.BORDER)
 
     def _setup_styles(self):
         s = ttk.Style()
         s.theme_use('clam')
 
         s.configure('.', background=self.BG, foreground=self.FG,
-                    bordercolor=self.SURFACE, relief='flat')
-        s.configure('TFrame',          background=self.BG)
-        s.configure('TLabel',          background=self.BG, foreground=self.FG)
-        s.configure('TLabelframe',     background=self.BG, bordercolor=self.SURFACE)
-        s.configure('TLabelframe.Label', background=self.BG, foreground=self.ACCENT,
-                    font=('Segoe UI', 9, 'bold'))
-        s.configure('TCheckbutton',    background=self.BG, foreground=self.FG)
-        s.configure('TRadiobutton',    background=self.BG, foreground=self.FG)
-        s.configure('TEntry',          fieldbackground=self.SURFACE, foreground=self.FG,
-                    bordercolor=self.SURFACE, insertcolor=self.FG)
-        s.configure('TButton',         background=self.SURFACE, foreground=self.FG,
-                    bordercolor=self.SURFACE, padding=(8, 4))
-        s.configure('TCombobox',       fieldbackground=self.SURFACE, foreground=self.FG,
-                    selectbackground=self.ACCENT, selectforeground=self.BG)
-        s.configure('TScale',          background=self.BG, troughcolor=self.SURFACE)
-        s.configure('TProgressbar',    background=self.ACCENT, troughcolor=self.SURFACE,
-                    bordercolor=self.SURFACE, thickness=12)
-        s.configure('Accent.TButton',  background=self.ACCENT, foreground=self.BG,
-                    font=('Segoe UI', 9, 'bold'), padding=(14, 5))
-        s.configure('Small.TButton',   background=self.SURFACE, foreground=self.FG,
-                    bordercolor=self.SURFACE, padding=(6, 1), font=('Segoe UI', 8))
-        s.configure('TNotebook',       background=self.BG, bordercolor=self.SURFACE)
-        s.configure('TNotebook.Tab',   background=self.SURFACE, foreground=self.FG,
-                    padding=(12, 5), font=('Segoe UI', 9))
+                    bordercolor=self.BORDER, relief='flat', focuscolor=self.ACCENT)
+        s.configure('TFrame', background=self.BG)
+        s.configure('Card.TFrame', background=self.CARD)
+        s.configure('TLabel', background=self.BG, foreground=self.FG)
+        s.configure('Card.TLabel', background=self.CARD, foreground=self.FG)
+        s.configure('CardSub.TLabel', background=self.CARD, foreground=self.SUB,
+                    font=('Segoe UI', 8))
+        s.configure('CardTitle.TLabel', background=self.CARD, foreground=self.FG,
+                    font=('Segoe UI', 10, 'bold'))
+        s.configure('PageTitle.TLabel', background=self.BG, foreground=self.FG,
+                    font=('Segoe UI', 16, 'bold'))
+        s.configure('PageSub.TLabel', background=self.BG, foreground=self.SUB,
+                    font=('Segoe UI', 9))
 
-        s.map('Accent.TButton',  background=[('active', self.ACCENT_ACTIVE)])
-        s.map('TButton',         background=[('active', self.BTN_ACTIVE)])
-        s.map('Small.TButton',   background=[('active', self.BTN_ACTIVE)])
-        s.map('TCheckbutton',    background=[('active', self.BG)])
-        s.map('TRadiobutton',    background=[('active', self.BG)])
-        s.map('TCombobox',       fieldbackground=[('readonly', self.SURFACE)])
-        s.map('TNotebook.Tab',   background=[('selected', self.ACCENT)],
-                                  foreground=[('selected', self.BG)])
+        s.configure('TCheckbutton', background=self.CARD, foreground=self.FG,
+                    indicatorcolor=self.BG, font=('Segoe UI', 9))
+        s.map('TCheckbutton',
+              background=[('active', self.CARD)],
+              indicatorcolor=[('selected', self.ACCENT), ('active', self.HOVER)],
+              foreground=[('disabled', self.SUB)])
+        s.configure('TRadiobutton', background=self.CARD, foreground=self.FG,
+                    indicatorcolor=self.BG, font=('Segoe UI', 9))
+        s.map('TRadiobutton',
+              background=[('active', self.CARD)],
+              indicatorcolor=[('selected', self.ACCENT), ('active', self.HOVER)],
+              foreground=[('disabled', self.SUB)])
 
-    # ── Construction UI ───────────────────────────────────────────────────────
+        s.configure('TEntry', fieldbackground=self.BG, foreground=self.FG,
+                    bordercolor=self.BORDER, insertcolor=self.FG,
+                    lightcolor=self.BORDER, darkcolor=self.BORDER, padding=5)
+        s.map('TEntry', bordercolor=[('focus', self.ACCENT)],
+              fieldbackground=[('disabled', self.CARD)],
+              foreground=[('disabled', self.SUB)])
+
+        s.configure('TButton', background=self.CARD, foreground=self.FG,
+                    bordercolor=self.BORDER, padding=(11, 6),
+                    font=('Segoe UI', 9))
+        s.map('TButton', background=[('active', self.HOVER),
+                                     ('disabled', self.BG)],
+              foreground=[('disabled', self.SUB)])
+        s.configure('Ghost.TButton', background=self.BG, foreground=self.SUB,
+                    bordercolor=self.BG, padding=(9, 5), font=('Segoe UI', 8))
+        s.map('Ghost.TButton', background=[('active', self.HOVER)],
+              foreground=[('active', self.FG), ('disabled', self.BORDER)])
+        s.configure('Accent.TButton', background=self.ACCENT,
+                    foreground=self.ON_ACCENT, bordercolor=self.ACCENT,
+                    font=('Segoe UI', 10, 'bold'), padding=(22, 8))
+        s.map('Accent.TButton',
+              background=[('active', self.ACCENT_ACTIVE), ('disabled', self.BORDER)],
+              foreground=[('disabled', self.SUB)],
+              bordercolor=[('disabled', self.BORDER)])
+
+        s.configure('TCombobox', fieldbackground=self.BG, background=self.BG,
+                    foreground=self.FG, bordercolor=self.BORDER,
+                    arrowcolor=self.SUB, selectbackground=self.BG,
+                    selectforeground=self.FG, padding=4)
+        s.map('TCombobox', fieldbackground=[('readonly', self.BG),
+                                            ('disabled', self.CARD)],
+              bordercolor=[('focus', self.ACCENT)],
+              foreground=[('disabled', self.SUB)])
+
+        s.configure('TScale', background=self.CARD, troughcolor=self.BG,
+                    bordercolor=self.BORDER)
+        s.configure('TProgressbar', background=self.ACCENT, troughcolor=self.BORDER,
+                    bordercolor=self.BORDER, thickness=8, lightcolor=self.ACCENT,
+                    darkcolor=self.ACCENT)
+        s.configure('TSeparator', background=self.BORDER)
+        s.configure('Vertical.TScrollbar', background=self.BORDER,
+                    troughcolor=self.BG, bordercolor=self.BG,
+                    arrowcolor=self.SUB, width=10)
+        s.map('Vertical.TScrollbar', background=[('active', self.SUB)])
 
     def _build_ui(self):
-        # En-tête
-        hdr = tk.Frame(self.root, bg=self.SURFACE, pady=10)
+        self._build_header()
+        tk.Frame(self.root, bg=self.BORDER, height=1).pack(fill='x')
+
+        body = tk.Frame(self.root, bg=self.BG)
+        body.pack(fill='both', expand=True)
+
+        self._build_sidebar(body)
+        tk.Frame(body, bg=self.BORDER, width=1).pack(side='left', fill='y')
+
+        self.page_host = tk.Frame(body, bg=self.BG)
+        self.page_host.pack(side='left', fill='both', expand=True)
+
+        self.pages: dict[str, tk.Frame] = {}
+        self.scrolls: dict[str, ScrollArea] = {}
+        self._build_page_source()
+        self._build_page_options()
+        self._build_page_advanced()
+        self._build_page_log()
+
+        self._build_action_bar()
+
+        self._toggle_tex()
+        self._toggle_snd()
+        self._toggle_lua()
+        self._toggle_target_size()
+        self._show_page(self._page)
+
+    def _build_header(self):
+        hdr = tk.Frame(self.root, bg=self.SIDEBAR, height=58)
         hdr.pack(fill='x')
+        hdr.pack_propagate(False)
 
-        title_box = tk.Frame(hdr, bg=self.SURFACE)
-        title_box.pack(side='left', padx=14)
+        left = tk.Frame(hdr, bg=self.SIDEBAR)
+        left.pack(side='left', padx=18)
 
-        title_row = tk.Frame(title_box, bg=self.SURFACE)
-        title_row.pack(anchor='w')
-        tk.Label(title_row, text="🗜️", bg=self.SURFACE, fg=self.ACCENT,
-                 font=('Segoe UI', 16)).pack(side='left', padx=(0, 6))
-        tk.Label(title_row, text="Compressez PM GMod",
-                 bg=self.SURFACE, fg=self.ACCENT,
-                 font=('Segoe UI', 14, 'bold')).pack(side='left')
-        tk.Label(title_row, text=f"  v{VERSION}",
-                 bg=self.SURFACE, fg=self.SUB,
-                 font=('Segoe UI', 9)).pack(side='left')
+        tk.Label(left, text="🗜", bg=self.SIDEBAR, fg=self.ACCENT,
+                 font=('Segoe UI', 18)).pack(side='left', padx=(0, 10))
 
-        tk.Label(title_box, text=self.t('app_tagline'),
-                 bg=self.SURFACE, fg=self.SUB,
-                 font=('Segoe UI', 8)).pack(anchor='w')
+        titles = tk.Frame(left, bg=self.SIDEBAR)
+        titles.pack(side='left')
+        row = tk.Frame(titles, bg=self.SIDEBAR)
+        row.pack(anchor='w')
+        tk.Label(row, text="Compressez PM GMod", bg=self.SIDEBAR, fg=self.FG,
+                 font=('Segoe UI', 13, 'bold')).pack(side='left')
+        tk.Label(row, text=f"v{VERSION}", bg=self.SIDEBAR, fg=self.SUB,
+                 font=('Segoe UI', 8)).pack(side='left', padx=(8, 0), pady=(4, 0))
+        tk.Label(titles, text=self.t('app_tagline'), bg=self.SIDEBAR,
+                 fg=self.SUB, font=('Segoe UI', 8)).pack(anchor='w')
+
+        actions = tk.Frame(hdr, bg=self.SIDEBAR)
+        actions.pack(side='right', padx=14)
 
         theme_key = 'btn_theme_light' if self.theme_name == 'dark' else 'btn_theme_dark'
-        self.theme_btn = ttk.Button(hdr, text=self.t(theme_key),
-                                    command=self._toggle_theme, width=14)
-        self.theme_btn.pack(side='right', padx=(0, 14))
-        lang_text = "English" if self.lang == 'fr' else "Français"
-        self.lang_btn = ttk.Button(hdr, text=lang_text,
-                                   command=self._toggle_language, width=10)
-        self.lang_btn.pack(side='right', padx=(0, 6))
-        ttk.Button(hdr, text=self.t('btn_about'), command=self._show_about,
-                   width=11).pack(side='right', padx=(0, 6))
+        self.theme_btn = self._header_button(actions, self.t(theme_key),
+                                             self._toggle_theme)
+        self.lang_btn = self._header_button(
+            actions, "EN" if self.lang == 'fr' else "FR", self._toggle_language)
+        self._header_button(actions, self.t('btn_about'), self._show_about)
 
-        tk.Frame(self.root, bg=self.ACCENT, height=2).pack(fill='x')
+    def _header_button(self, parent, text: str, command):
+        btn = tk.Label(parent, text=text, bg=self.SIDEBAR, fg=self.SUB,
+                       font=('Segoe UI', 9), padx=11, pady=5, cursor='hand2')
+        btn.pack(side='right', padx=3)
+        btn._enabled = True
 
-        # Corps principal
-        main = ttk.Frame(self.root, padding=(10, 8, 10, 10))
-        main.pack(fill='both', expand=True)
+        def on_click(_event=None):
+            if btn._enabled:
+                command()
 
-        self._build_io_section(main)
-        self._build_options_section(main)
-        self._build_progress_section(main)
-        # Boutons ancrés en bas AVANT le journal : ils restent visibles même
-        # quand la fenêtre est trop petite (le journal absorbe le reste).
-        self._build_buttons(main)
-        self._build_log_section(main)
+        btn.bind('<Button-1>', on_click)
+        btn.bind('<Enter>', lambda e: btn._enabled and btn.configure(
+            bg=self.HOVER, fg=self.FG))
+        btn.bind('<Leave>', lambda e: btn.configure(bg=self.SIDEBAR, fg=self.SUB))
+        return btn
 
-    # ── Section Entrée / Sortie ───────────────────────────────────────────────
+    @staticmethod
+    def _set_header_enabled(btn, enabled: bool):
+        btn._enabled = enabled
+        btn.configure(cursor='hand2' if enabled else 'arrow')
 
-    def _build_io_section(self, parent):
-        frm = ttk.LabelFrame(parent, text=self.t('io_section'), padding=8)
-        frm.pack(fill='x', pady=(0, 6))
+    def _build_sidebar(self, parent):
+        bar = tk.Frame(parent, bg=self.SIDEBAR, width=SIDEBAR_WIDTH)
+        bar.pack(side='left', fill='y')
+        bar.pack_propagate(False)
 
-        # Zone de dépôt visuelle (clic = parcourir, drop = sélectionner)
-        self.drop_canvas = tk.Canvas(frm, height=58, bg=self.BG,
+        tk.Frame(bar, bg=self.SIDEBAR, height=12).pack()
+
+        self._nav: dict[str, tuple] = {}
+        for key in PAGES:
+            self._build_nav_item(bar, key)
+
+        bottom = tk.Frame(bar, bg=self.SIDEBAR)
+        bottom.pack(side='bottom', fill='x', pady=12, padx=14)
+
+        tk.Label(bottom, text=self.t('sidebar_libs'), bg=self.SIDEBAR,
+                 fg=self.SUB, font=('Segoe UI', 7, 'bold')).pack(anchor='w')
+        for label, ok in (('Pillow', PIL_AVAILABLE), ('vtflib', VTFLIB_AVAILABLE),
+                          ('ffmpeg', FFMPEG_AVAILABLE)):
+            row = tk.Frame(bottom, bg=self.SIDEBAR)
+            row.pack(anchor='w', fill='x')
+            tk.Label(row, text="●", bg=self.SIDEBAR,
+                     fg=self.GREEN if ok else self.BORDER,
+                     font=('Segoe UI', 7)).pack(side='left')
+            tk.Label(row, text=label, bg=self.SIDEBAR, fg=self.SUB,
+                     font=('Segoe UI', 8)).pack(side='left', padx=(5, 0))
+
+        tk.Frame(bottom, bg=self.BORDER, height=1).pack(fill='x', pady=9)
+        oss = tk.Label(bottom, text=self.t('sidebar_oss'), bg=self.SIDEBAR,
+                       fg=self.SUB, font=('Segoe UI', 7), cursor='hand2')
+        oss.pack(anchor='w')
+        oss.bind('<Button-1>', lambda e: self._open_repo())
+
+    def _build_nav_item(self, parent, key: str):
+        row = tk.Frame(parent, bg=self.SIDEBAR, cursor='hand2')
+        row.pack(fill='x', padx=9, pady=1)
+
+        marker = tk.Frame(row, bg=self.SIDEBAR, width=3)
+        marker.pack(side='left', fill='y')
+
+        label = tk.Label(row, text=f"  {PAGE_ICONS[key]}   {self.t('nav_' + key)}",
+                         bg=self.SIDEBAR, fg=self.SUB, font=('Segoe UI', 10),
+                         anchor='w', padx=6, pady=8)
+        label.pack(side='left', fill='x', expand=True)
+
+        badge = tk.Label(row, text="", bg=self.SIDEBAR, fg=self.SUB,
+                         font=('Segoe UI', 8, 'bold'), padx=8)
+        badge.pack(side='right')
+
+        for widget in (row, marker, label, badge):
+            widget.bind('<Button-1>', lambda e, k=key: self._show_page(k))
+            widget.bind('<Enter>', lambda e, k=key: self._nav_hover(k, True))
+            widget.bind('<Leave>', lambda e, k=key: self._nav_hover(k, False))
+
+        self._nav[key] = (row, marker, label, badge)
+
+    def _nav_hover(self, key: str, entering: bool):
+        if key == self._page:
+            return
+        row, marker, label, badge = self._nav[key]
+        bg = self.HOVER if entering else self.SIDEBAR
+        for widget in (row, marker, label, badge):
+            widget.configure(bg=bg)
+        label.configure(fg=self.FG if entering else self.SUB)
+
+    def _paint_nav(self):
+        for key in PAGES:
+            row, marker, label, badge = self._nav[key]
+            active = key == self._page
+            bg = self.BG if active else self.SIDEBAR
+            for widget in (row, label, badge):
+                widget.configure(bg=bg)
+            marker.configure(bg=self.ACCENT if active else bg)
+            label.configure(fg=self.FG if active else self.SUB,
+                            font=('Segoe UI', 10, 'bold' if active else 'normal'))
+
+    def _show_page(self, key: str):
+        if key not in self.pages:
+            key = 'source'
+        self._page = key
+        for name, frame in self.pages.items():
+            if name == key:
+                frame.pack(fill='both', expand=True)
+            else:
+                frame.pack_forget()
+        self._paint_nav()
+
+    def _page_shell(self, key: str, scrollable: bool = True):
+        frame = tk.Frame(self.page_host, bg=self.BG)
+        self.pages[key] = frame
+
+        head = tk.Frame(frame, bg=self.BG)
+        head.pack(fill='x', padx=22, pady=(18, 2))
+        tk.Label(head, text=self.t('nav_' + key), bg=self.BG, fg=self.FG,
+                 font=('Segoe UI', 16, 'bold')).pack(anchor='w')
+        tk.Label(head, text=self.t('page_' + key + '_sub'), bg=self.BG,
+                 fg=self.SUB, font=('Segoe UI', 9)).pack(anchor='w', pady=(1, 0))
+
+        if not scrollable:
+            host = tk.Frame(frame, bg=self.BG)
+            host.pack(fill='both', expand=True, padx=22, pady=(12, 8))
+            return host
+
+        area = ScrollArea(frame, self.BG)
+        area.outer.pack(fill='both', expand=True, padx=(22, 8), pady=(12, 8))
+        self.scrolls[key] = area
+        return area.inner
+
+    def _card(self, parent, title: str, side=None, **pack_kw):
+        shell = tk.Frame(parent, bg=self.BORDER, padx=1, pady=1)
+        if side:
+            shell.pack(side=side, **pack_kw)
+        else:
+            shell.pack(**pack_kw)
+        inner = tk.Frame(shell, bg=self.CARD, padx=16, pady=13)
+        inner.pack(fill='both', expand=True)
+        if title:
+            tk.Label(inner, text=title, bg=self.CARD, fg=self.FG,
+                     font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=(0, 9))
+        return inner
+
+    def _two_columns(self, parent, pady=0):
+        cols = tk.Frame(parent, bg=self.BG)
+        cols.pack(fill='both', expand=True, pady=pady)
+        left = tk.Frame(cols, bg=self.BG)
+        right = tk.Frame(cols, bg=self.BG)
+        left.grid(row=0, column=0, sticky='new')
+        right.grid(row=0, column=1, sticky='new', padx=(14, 0))
+        cols.columnconfigure(0, weight=1, uniform='col')
+        cols.columnconfigure(1, weight=1, uniform='col')
+        return left, right
+
+    def _check(self, parent, chk_key: str, variable, desc_key: str | None = None,
+               tip_key: str | None = None, command=None, pady=(0, 8)):
+        box = ttk.Checkbutton(parent, text=self.t(chk_key), variable=variable,
+                              command=command)
+        box.pack(anchor='w')
+        if tip_key:
+            self._tooltip(box, tip_key)
+        if desc_key:
+            tk.Label(parent, text=self.t(desc_key).strip(), bg=self.CARD,
+                     fg=self.SUB, font=('Segoe UI', 8), justify='left',
+                     anchor='w').pack(anchor='w', padx=(20, 0), pady=pady)
+        elif pady:
+            tk.Frame(parent, bg=self.CARD, height=pady[1]).pack()
+        return box
+
+    def _build_page_source(self):
+        host = self._page_shell('source')
+
+        card = self._card(host, self.t('card_source'), fill='x')
+
+        self.drop_canvas = tk.Canvas(card, height=104, bg=self.CARD,
                                      highlightthickness=0, cursor='hand2')
-        self.drop_canvas.pack(fill='x', pady=(0, 6))
+        self.drop_canvas.pack(fill='x', pady=(0, 12))
         self.drop_canvas.bind('<Configure>', lambda e: self._draw_drop_zone())
         self.drop_canvas.bind('<Button-1>', lambda e: self._browse_source())
         if DND_AVAILABLE:
@@ -286,466 +568,443 @@ class App:
                 target.drop_target_register(DND_FILES)
                 target.dnd_bind('<<Drop>>', self._on_drop_source)
 
-        # Source
-        r = ttk.Frame(frm)
-        r.pack(fill='x', pady=2)
-        ttk.Label(r, text=self.t('label_source'), width=9).pack(side='left')
+        row = tk.Frame(card, bg=self.CARD)
+        row.pack(fill='x')
         self.source_var = tk.StringVar()
         self.source_var.trace_add('write', lambda *_: self._draw_drop_zone())
-        src_entry = ttk.Entry(r, textvariable=self.source_var)
-        src_entry.pack(side='left', fill='x', expand=True, padx=(0, 4))
-        recent_btn = ttk.Button(r, text="🕘", width=3, command=self._show_recent_menu)
-        recent_btn.pack(side='right', padx=(4, 0))
+        src_entry = ttk.Entry(row, textvariable=self.source_var)
+        src_entry.pack(side='left', fill='x', expand=True)
+        recent_btn = ttk.Button(row, text="🕘", width=3,
+                                command=self._show_recent_menu)
+        recent_btn.pack(side='right', padx=(6, 0))
         self._tooltip(recent_btn, 'tip_recent')
-        ttk.Button(r, text=self.t('btn_browse'), command=self._browse_source,
-                   width=10).pack(side='right')
-
+        ttk.Button(row, text=self.t('btn_browse'), command=self._browse_source,
+                   width=13).pack(side='right', padx=(6, 0))
         if DND_AVAILABLE:
             src_entry.drop_target_register(DND_FILES)
             src_entry.dnd_bind('<<Drop>>', self._on_drop_source)
 
-        # Output
-        r2 = ttk.Frame(frm)
-        r2.pack(fill='x', pady=2)
-        ttk.Label(r2, text=self.t('label_output'), width=9).pack(side='left')
-        self.output_var = tk.StringVar()
-        ttk.Entry(r2, textvariable=self.output_var).pack(side='left', fill='x',
-                                                         expand=True, padx=(0, 4))
-        ttk.Button(r2, text=self.t('btn_browse'), command=self._browse_output,
-                   width=10).pack(side='right')
-
-        # Types
-        types_row = ttk.Frame(frm)
-        types_row.pack(fill='x', pady=(5, 0))
-
-        ttk.Label(types_row, text=self.t('label_source_type')).pack(side='left')
+        types = tk.Frame(card, bg=self.CARD)
+        types.pack(fill='x', pady=(11, 0))
+        tk.Label(types, text=self.t('label_source_type'), bg=self.CARD,
+                 fg=self.SUB, font=('Segoe UI', 8)).pack(side='left', padx=(0, 8))
         self.src_type = tk.StringVar(value='folder')
-        ttk.Radiobutton(types_row, text=self.t('radio_folder'),   variable=self.src_type, value='folder').pack(side='left', padx=(4, 10))
-        ttk.Radiobutton(types_row, text=self.t('radio_gma_file'), variable=self.src_type, value='gma').pack(side='left', padx=(0, 20))
+        ttk.Radiobutton(types, text=self.t('radio_folder'), variable=self.src_type,
+                        value='folder').pack(side='left', padx=(0, 14))
+        ttk.Radiobutton(types, text=self.t('radio_gma_file'), variable=self.src_type,
+                        value='gma').pack(side='left')
 
-        ttk.Label(types_row, text=self.t('label_output_format')).pack(side='left')
-        self.out_fmt = tk.StringVar(value='folder')
-        ttk.Radiobutton(types_row, text=self.t('radio_folder'), variable=self.out_fmt, value='folder').pack(side='left', padx=(4, 8))
-        ttk.Radiobutton(types_row, text=".gma",                 variable=self.out_fmt, value='gma').pack(side='left', padx=(0, 8))
-        ttk.Radiobutton(types_row, text=".zip",                 variable=self.out_fmt, value='zip').pack(side='left')
-
-        # Statistiques de la source (mises à jour après sélection)
         self.stats_var = tk.StringVar(value="")
-        ttk.Label(frm, textvariable=self.stats_var,
-                  foreground=self.ACCENT, font=('Segoe UI', 8, 'bold')).pack(anchor='w', pady=(4, 0))
+        tk.Label(card, textvariable=self.stats_var, bg=self.CARD, fg=self.ACCENT,
+                 font=('Segoe UI', 9, 'bold')).pack(anchor='w', pady=(11, 0))
+
+        out_card = self._card(host, self.t('card_output'), fill='x', pady=(14, 0))
+
+        row2 = tk.Frame(out_card, bg=self.CARD)
+        row2.pack(fill='x')
+        self.output_var = tk.StringVar()
+        ttk.Entry(row2, textvariable=self.output_var).pack(
+            side='left', fill='x', expand=True)
+        ttk.Button(row2, text=self.t('btn_browse'), command=self._browse_output,
+                   width=13).pack(side='right', padx=(6, 0))
+
+        fmt = tk.Frame(out_card, bg=self.CARD)
+        fmt.pack(fill='x', pady=(11, 0))
+        tk.Label(fmt, text=self.t('label_output_format'), bg=self.CARD,
+                 fg=self.SUB, font=('Segoe UI', 8)).pack(side='left', padx=(0, 8))
+        self.out_fmt = tk.StringVar(value='folder')
+        for text, value in ((self.t('radio_folder'), 'folder'),
+                            (".gma", 'gma'), (".zip", 'zip')):
+            ttk.Radiobutton(fmt, text=text, variable=self.out_fmt,
+                            value=value).pack(side='left', padx=(0, 14))
 
     def _draw_drop_zone(self):
-        c = self.drop_canvas
-        c.delete('all')
-        w = max(c.winfo_width(), 60)
-        h = 58
-        c.create_rectangle(3, 3, w - 3, h - 3, dash=(5, 3),
-                           outline=self.SUB, width=1)
-        src = self.source_var.get().strip()
-        if src:
-            name = Path(src).name or src
-            c.create_text(w / 2, h / 2 - 9, text=f"📦 {name}",
-                          fill=self.ACCENT, font=('Segoe UI', 10, 'bold'))
-            sub = self._drop_stats_line or self.t('drop_change_hint')
-            c.create_text(w / 2, h / 2 + 11, text=sub,
-                          fill=self.SUB, font=('Segoe UI', 8))
+        canvas = getattr(self, 'drop_canvas', None)
+        if canvas is None:
+            return
+        canvas.delete('all')
+        width = max(canvas.winfo_width(), 80)
+        height = 104
+        canvas.create_rectangle(2, 2, width - 2, height - 2, dash=(6, 4),
+                                outline=self.BORDER, width=1)
+        source = self.source_var.get().strip()
+        if source:
+            name = Path(source).name or source
+            canvas.create_text(width / 2, height / 2 - 18, text="📦",
+                               fill=self.ACCENT, font=('Segoe UI', 19))
+            canvas.create_text(width / 2, height / 2 + 8, text=name,
+                               fill=self.FG, font=('Segoe UI', 11, 'bold'))
+            canvas.create_text(width / 2, height / 2 + 28,
+                               text=self._drop_stats_line or self.t('drop_change_hint'),
+                               fill=self.SUB, font=('Segoe UI', 8))
         else:
             title = self.t('drop_title') if DND_AVAILABLE else self.t('drop_title_nodnd')
-            c.create_text(w / 2, h / 2 - 9, text=title,
-                          fill=self.FG, font=('Segoe UI', 10, 'bold'))
-            c.create_text(w / 2, h / 2 + 11, text=self.t('drop_or'),
-                          fill=self.SUB, font=('Segoe UI', 8))
+            canvas.create_text(width / 2, height / 2 - 16, text="⬇",
+                               fill=self.SUB, font=('Segoe UI', 19))
+            canvas.create_text(width / 2, height / 2 + 9, text=title,
+                               fill=self.FG, font=('Segoe UI', 10, 'bold'))
+            canvas.create_text(width / 2, height / 2 + 29, text=self.t('drop_or'),
+                               fill=self.SUB, font=('Segoe UI', 8))
 
-    # ── Section Options ───────────────────────────────────────────────────────
+    def _build_page_options(self):
+        host = self._page_shell('options')
 
-    def _build_options_section(self, parent):
-        # ── Profil rapide ───────────────────────────────────────────────────
-        profile_frm = ttk.Frame(parent)
-        profile_frm.pack(fill='x', pady=(0, 6))
-        ttk.Label(profile_frm, text=self.t('label_profile')).pack(side='left')
-        self._profile_label_to_id = {self._profile_label(pid): pid for pid in self.PRESETS}
+        profile = self._card(host, self.t('card_profile'), fill='x')
+        prow = tk.Frame(profile, bg=self.CARD)
+        prow.pack(fill='x')
+        self._profile_label_to_id = {self._profile_label(pid): pid
+                                     for pid in self.PRESETS}
         self.profile_var = tk.StringVar(value=self._profile_label('custom'))
-        profile_combo = ttk.Combobox(profile_frm, textvariable=self.profile_var, width=26,
-                                      values=list(self._profile_label_to_id.keys()), state='readonly')
-        profile_combo.pack(side='left', padx=4)
-        profile_combo.bind('<<ComboboxSelected>>', self._apply_profile)
-        self._tooltip(profile_combo, 'tip_profile')
-        ttk.Label(profile_frm, text=self.t('profile_hint'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(side='left')
+        combo = ttk.Combobox(prow, textvariable=self.profile_var, width=28,
+                             values=list(self._profile_label_to_id.keys()),
+                             state='readonly')
+        combo.pack(side='left')
+        combo.bind('<<ComboboxSelected>>', self._apply_profile)
+        self._tooltip(combo, 'tip_profile')
+        tk.Label(prow, text=self.t('profile_hint').strip(), bg=self.CARD,
+                 fg=self.SUB, font=('Segoe UI', 8)).pack(side='left', padx=(12, 0))
 
-        # ── Onglets Général / Avancé ────────────────────────────────────────
-        notebook = ttk.Notebook(parent)
-        notebook.pack(fill='x', pady=(0, 6))
+        left, right = self._two_columns(host, pady=(14, 0))
 
-        general_tab  = ttk.Frame(notebook, padding=8)
-        advanced_tab = ttk.Frame(notebook, padding=8)
-        notebook.add(general_tab,  text=self.t('tab_general'))
-        notebook.add(advanced_tab, text=self.t('tab_advanced'))
-
-        # ════════════════════ Onglet Général ════════════════════
-        left  = ttk.Frame(general_tab)
-        left.pack(side='left', fill='both', expand=True)
-        right = ttk.Frame(general_tab)
-        right.pack(side='left', fill='both', expand=True, padx=(12, 0))
-
-        # C-Hands
+        clean = self._card(left, self.t('card_cleanup'), fill='x')
         self.rem_chands = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(left, text=self.t('chk_chands'), variable=self.rem_chands)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_chands')
-        ttk.Label(left, text=self.t('desc_chands'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        # Fichiers inutiles
+        self._check(clean, 'chk_chands', self.rem_chands, 'desc_chands', 'tip_chands')
         self.rem_unused = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(left, text=self.t('chk_unused'), variable=self.rem_unused)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_unused')
-        ttk.Label(left, text=self.t('desc_unused'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        # Vérification des matériaux
+        self._check(clean, 'chk_unused', self.rem_unused, 'desc_unused', 'tip_unused')
         self.check_materials = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(left, text=self.t('chk_check_materials'),
-                             variable=self.check_materials)
-        cb.pack(anchor='w', pady=(0, 5))
-        self._tooltip(cb, 'tip_check_materials')
-
-        # Suppression des textures inutilisées
+        self._check(clean, 'chk_check_materials', self.check_materials,
+                    None, 'tip_check_materials')
         self.rem_unused_tex = tk.BooleanVar(value=False)
-        cb = ttk.Checkbutton(left, text=self.t('chk_remove_unused_tex'),
-                             variable=self.rem_unused_tex)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_remove_unused_tex')
-        ttk.Label(left, text=self.t('desc_remove_unused_tex'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        # Déduplication des textures identiques
+        self._check(clean, 'chk_remove_unused_tex', self.rem_unused_tex,
+                    'desc_remove_unused_tex', 'tip_remove_unused_tex')
         self.dedup_tex = tk.BooleanVar(value=False)
-        cb = ttk.Checkbutton(left, text=self.t('chk_dedup'), variable=self.dedup_tex)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_dedup')
-        ttk.Label(left, text=self.t('desc_dedup'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+        self._check(clean, 'chk_dedup', self.dedup_tex, 'desc_dedup', 'tip_dedup',
+                    pady=(0, 0))
 
-        # Textures
+        tex = self._card(right, self.t('card_textures'), fill='x')
         self.comp_tex = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(right, text=self.t('chk_textures'),
-                             variable=self.comp_tex, command=self._toggle_tex)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_textures')
+        self._check(tex, 'chk_textures', self.comp_tex, None, 'tip_textures',
+                    command=self._toggle_tex, pady=(0, 4))
 
-        self.tex_sub = ttk.Frame(right)
-        self.tex_sub.pack(anchor='w', padx=(16, 0), pady=(2, 0))
+        self.tex_sub = tk.Frame(tex, bg=self.CARD)
+        self.tex_sub.pack(fill='x', padx=(20, 0))
 
-        r1 = ttk.Frame(self.tex_sub)
-        r1.pack(anchor='w', pady=1)
-        ttk.Label(r1, text=self.t('label_max_res')).pack(side='left')
+        res_row = tk.Frame(self.tex_sub, bg=self.CARD)
+        res_row.pack(fill='x', pady=3)
+        tk.Label(res_row, text=self.t('label_max_res'), bg=self.CARD, fg=self.FG,
+                 font=('Segoe UI', 9), width=15, anchor='w').pack(side='left')
         self.max_res = tk.StringVar(value='1024')
-        res_combo = ttk.Combobox(r1, textvariable=self.max_res, width=14,
-                                 values=['256', '512', '1024', '2048', self.t('no_limit')],
-                                 state='readonly')
-        res_combo.pack(side='left', padx=4)
+        res_combo = ttk.Combobox(res_row, textvariable=self.max_res, width=14,
+                                 values=['256', '512', '1024', '2048',
+                                         self.t('no_limit')], state='readonly')
+        res_combo.pack(side='left')
         self._tooltip(res_combo, 'tip_max_res')
 
-        r2 = ttk.Frame(self.tex_sub)
-        r2.pack(anchor='w', pady=1)
-        ttk.Label(r2, text=self.t('label_quality')).pack(side='left')
+        qual_row = tk.Frame(self.tex_sub, bg=self.CARD)
+        qual_row.pack(fill='x', pady=3)
+        tk.Label(qual_row, text=self.t('label_quality'), bg=self.CARD, fg=self.FG,
+                 font=('Segoe UI', 9), width=15, anchor='w').pack(side='left')
         self.tex_qual = tk.IntVar(value=85)
-        qual_scale = ttk.Scale(r2, from_=10, to=100, variable=self.tex_qual,
-                               orient='h', length=110)
-        qual_scale.pack(side='left', padx=4)
-        self._tooltip(qual_scale, 'tip_quality')
-        self.qual_lbl = ttk.Label(r2, text="85%", width=5)
-        self.qual_lbl.pack(side='left')
+        scale = ttk.Scale(qual_row, from_=10, to=100, variable=self.tex_qual,
+                          orient='h', length=130)
+        scale.pack(side='left')
+        self._tooltip(scale, 'tip_quality')
+        self.qual_lbl = tk.Label(qual_row, text="85%", bg=self.CARD,
+                                 fg=self.ACCENT, font=('Segoe UI', 9, 'bold'),
+                                 width=5)
+        self.qual_lbl.pack(side='left', padx=(8, 0))
         self.tex_qual.trace_add('write', lambda *_: self.qual_lbl.config(
             text=f"{self.tex_qual.get()}%"))
 
         if not PIL_AVAILABLE and not VTFLIB_AVAILABLE:
-            ttk.Label(self.tex_sub,
-                      text=self.t('pillow_hint'),
-                      foreground=self.YELLOW, font=('Segoe UI', 8)).pack(anchor='w', pady=(2, 0))
+            tk.Label(self.tex_sub, text=self.t('pillow_hint'), bg=self.CARD,
+                     fg=self.YELLOW, font=('Segoe UI', 8)).pack(anchor='w',
+                                                                pady=(5, 0))
 
-        # Génération Lua
-        ttk.Separator(right, orient='horizontal').pack(fill='x', pady=(10, 4))
-
+        lua = self._card(right, self.t('card_lua'), fill='x', pady=(14, 0))
         self.gen_lua = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(right, text=self.t('chk_lua'),
-                             variable=self.gen_lua, command=self._toggle_lua)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_lua')
-        ttk.Label(right, text=self.t('desc_lua'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 3))
-
-        self.lua_sub = ttk.Frame(right)
-        self.lua_sub.pack(anchor='w', padx=(16, 0))
-
+        self._check(lua, 'chk_lua', self.gen_lua, 'desc_lua', 'tip_lua',
+                    command=self._toggle_lua, pady=(0, 6))
+        self.lua_sub = tk.Frame(lua, bg=self.CARD)
+        self.lua_sub.pack(fill='x', padx=(20, 0))
         self.lua_chands = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(self.lua_sub, text=self.t('chk_lua_chands'),
-                             variable=self.lua_chands)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_lua_chands')
-        ttk.Label(self.lua_sub,
-                  text=self.t('desc_lua_chands'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w')
+        box = ttk.Checkbutton(self.lua_sub, text=self.t('chk_lua_chands'),
+                              variable=self.lua_chands)
+        box.pack(anchor='w')
+        self._tooltip(box, 'tip_lua_chands')
+        tk.Label(self.lua_sub, text=self.t('desc_lua_chands').strip(),
+                 bg=self.CARD, fg=self.SUB, font=('Segoe UI', 8),
+                 justify='left').pack(anchor='w', padx=(20, 0))
 
-        # ════════════════════ Onglet Avancé (3 colonnes) ════════════════════
-        cols = ttk.Frame(advanced_tab)
-        cols.pack(fill='x')
-        col1 = ttk.Frame(cols)
-        col1.pack(side='left', fill='both', expand=True)
-        col2 = ttk.Frame(cols)
-        col2.pack(side='left', fill='both', expand=True, padx=(12, 0))
-        col3 = ttk.Frame(cols)
-        col3.pack(side='left', fill='both', expand=True, padx=(12, 0))
+    def _build_page_advanced(self):
+        host = self._page_shell('advanced')
 
-        # ── Colonne 1 : sons + ZIP ──
+        left, right = self._two_columns(host)
+
+        sound = self._card(left, self.t('card_sounds'), fill='x')
         self.comp_snd = tk.BooleanVar(value=False)
-        cb = ttk.Checkbutton(col1, text=self.t('chk_sounds'),
-                             variable=self.comp_snd, command=self._toggle_snd)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_sounds')
-        snd_status = (self.t('ffmpeg_ok') if FFMPEG_AVAILABLE
-                      else self.t('ffmpeg_missing_lbl'))
-        snd_color = self.GREEN if FFMPEG_AVAILABLE else self.YELLOW
-        ttk.Label(col1, text=f"  {snd_status}",
-                  foreground=snd_color, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+        self._check(sound, 'chk_sounds', self.comp_snd, None, 'tip_sounds',
+                    command=self._toggle_snd, pady=(0, 2))
+        tk.Label(sound,
+                 text=self.t('ffmpeg_ok') if FFMPEG_AVAILABLE
+                 else self.t('ffmpeg_missing_lbl'),
+                 bg=self.CARD, fg=self.GREEN if FFMPEG_AVAILABLE else self.YELLOW,
+                 font=('Segoe UI', 8)).pack(anchor='w', padx=(20, 0), pady=(0, 6))
 
-        self.snd_sub = ttk.Frame(col1)
-        self.snd_sub.pack(anchor='w', padx=(16, 0))
-
-        rs = ttk.Frame(self.snd_sub)
-        rs.pack(anchor='w')
-        ttk.Label(rs, text=self.t('label_bitrate')).pack(side='left')
+        self.snd_sub = tk.Frame(sound, bg=self.CARD)
+        self.snd_sub.pack(fill='x', padx=(20, 0))
+        brow = tk.Frame(self.snd_sub, bg=self.CARD)
+        brow.pack(fill='x')
+        tk.Label(brow, text=self.t('label_bitrate'), bg=self.CARD, fg=self.FG,
+                 font=('Segoe UI', 9), width=11, anchor='w').pack(side='left')
         self.snd_qual = tk.StringVar(value='128k')
-        ttk.Combobox(rs, textvariable=self.snd_qual, width=8,
+        ttk.Combobox(brow, textvariable=self.snd_qual, width=9,
                      values=['64k', '96k', '128k', '192k', '320k'],
-                     state='readonly').pack(side='left', padx=4)
+                     state='readonly').pack(side='left')
 
-        ttk.Label(col1, text=self.t('label_zip_level'),
-                  foreground=self.FG).pack(anchor='w', pady=(12, 2))
-        zr = ttk.Frame(col1)
-        zr.pack(anchor='w')
-        ttk.Label(zr, text=self.t('zip_fast')).pack(side='left')
+        tk.Frame(sound, bg=self.BORDER, height=1).pack(fill='x', pady=12)
+        tk.Label(sound, text=self.t('label_zip_level'), bg=self.CARD, fg=self.FG,
+                 font=('Segoe UI', 9)).pack(anchor='w', pady=(0, 5))
+        zrow = tk.Frame(sound, bg=self.CARD)
+        zrow.pack(fill='x')
+        tk.Label(zrow, text=self.t('zip_fast'), bg=self.CARD, fg=self.SUB,
+                 font=('Segoe UI', 8)).pack(side='left')
         self.zip_lvl = tk.IntVar(value=6)
-        zip_scale = ttk.Scale(zr, from_=1, to=9, variable=self.zip_lvl,
-                              orient='h', length=100)
-        zip_scale.pack(side='left', padx=4)
-        self._tooltip(zip_scale, 'tip_zip')
-        ttk.Label(zr, text=self.t('zip_max')).pack(side='left')
+        zscale = ttk.Scale(zrow, from_=1, to=9, variable=self.zip_lvl,
+                           orient='h', length=120)
+        zscale.pack(side='left', padx=8)
+        self._tooltip(zscale, 'tip_zip')
+        tk.Label(zrow, text=self.t('zip_max'), bg=self.CARD, fg=self.SUB,
+                 font=('Segoe UI', 8)).pack(side='left')
+        self.zip_lbl = tk.Label(zrow, text="6", bg=self.CARD, fg=self.ACCENT,
+                                font=('Segoe UI', 9, 'bold'), width=3)
+        self.zip_lbl.pack(side='left', padx=(8, 0))
+        self.zip_lvl.trace_add('write', lambda *_: self.zip_lbl.config(
+            text=str(int(self.zip_lvl.get()))))
 
-        # ── Colonne 2 : sécurité / rapport ──
-        self.dry_run = tk.BooleanVar(value=False)
-        cb = ttk.Checkbutton(col2, text=self.t('chk_dry_run'), variable=self.dry_run)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_dry_run')
-        ttk.Label(col2, text=self.t('desc_dry_run'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        self.backup = tk.BooleanVar(value=False)
-        cb = ttk.Checkbutton(col2, text=self.t('chk_backup'), variable=self.backup)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_backup')
-        ttk.Label(col2, text=self.t('desc_backup'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        self.convert_uncompressed = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(col2, text=self.t('chk_convert'),
-                             variable=self.convert_uncompressed)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_convert')
-        ttk.Label(col2, text=self.t('desc_convert'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        self.gen_report = tk.BooleanVar(value=True)
-        cb = ttk.Checkbutton(col2, text=self.t('chk_report'), variable=self.gen_report)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_report')
-        ttk.Label(col2, text=self.t('desc_report'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
-
-        # ── Colonne 3 : taille cible / batch / whitelist ──
+        limits = self._card(left, self.t('card_limits'), fill='x', pady=(14, 0))
         self.target_size_enabled = tk.BooleanVar(value=False)
-        ts_row = ttk.Frame(col3)
-        ts_row.pack(anchor='w')
-        cb = ttk.Checkbutton(ts_row, text=self.t('chk_target_size'),
-                             variable=self.target_size_enabled,
-                             command=self._toggle_target_size)
-        cb.pack(side='left')
-        self._tooltip(cb, 'tip_target_size')
+        trow = tk.Frame(limits, bg=self.CARD)
+        trow.pack(anchor='w')
+        box = ttk.Checkbutton(trow, text=self.t('chk_target_size'),
+                              variable=self.target_size_enabled,
+                              command=self._toggle_target_size)
+        box.pack(side='left')
+        self._tooltip(box, 'tip_target_size')
         self.target_size_mb = tk.StringVar(value='10')
-        self.target_size_entry = ttk.Entry(ts_row, textvariable=self.target_size_mb, width=6)
-        self.target_size_entry.pack(side='left', padx=4)
-        ttk.Label(ts_row, text=self.t('label_mb')).pack(side='left')
-        ttk.Label(col3, text=self.t('desc_target_size'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+        self.target_size_entry = ttk.Entry(trow, textvariable=self.target_size_mb,
+                                           width=7)
+        self.target_size_entry.pack(side='left', padx=6)
+        tk.Label(trow, text=self.t('label_mb'), bg=self.CARD, fg=self.SUB,
+                 font=('Segoe UI', 9)).pack(side='left')
+        tk.Label(limits, text=self.t('desc_target_size').strip(), bg=self.CARD,
+                 fg=self.SUB, font=('Segoe UI', 8), justify='left').pack(
+            anchor='w', padx=(20, 0), pady=(0, 9))
 
         self.batch = tk.BooleanVar(value=False)
-        cb = ttk.Checkbutton(col3, text=self.t('chk_batch'), variable=self.batch)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_batch')
-        ttk.Label(col3, text=self.t('desc_batch'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+        self._check(limits, 'chk_batch', self.batch, 'desc_batch', 'tip_batch',
+                    pady=(0, 0))
 
+        safety = self._card(right, self.t('card_safety'), fill='x')
+        self.dry_run = tk.BooleanVar(value=False)
+        self._check(safety, 'chk_dry_run', self.dry_run, 'desc_dry_run',
+                    'tip_dry_run')
+        self.backup = tk.BooleanVar(value=False)
+        self._check(safety, 'chk_backup', self.backup, 'desc_backup', 'tip_backup')
+        self.convert_uncompressed = tk.BooleanVar(value=True)
+        self._check(safety, 'chk_convert', self.convert_uncompressed,
+                    'desc_convert', 'tip_convert')
+        self.gen_report = tk.BooleanVar(value=True)
+        self._check(safety, 'chk_report', self.gen_report, 'desc_report',
+                    'tip_report', pady=(0, 0))
+
+        gma = self._card(right, self.t('card_gma'), fill='x', pady=(14, 0))
         self.strip_whitelist = tk.BooleanVar(value=False)
-        cb = ttk.Checkbutton(col3, text=self.t('chk_strip_whitelist'),
-                             variable=self.strip_whitelist)
-        cb.pack(anchor='w')
-        self._tooltip(cb, 'tip_strip_whitelist')
-        ttk.Label(col3, text=self.t('desc_strip_whitelist'),
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(anchor='w', pady=(0, 5))
+        self._check(gma, 'chk_strip_whitelist', self.strip_whitelist,
+                    'desc_strip_whitelist', 'tip_strip_whitelist', pady=(0, 0))
 
-        self._toggle_tex()
-        self._toggle_snd()
-        self._toggle_lua()
-        self._toggle_target_size()
+    def _build_page_log(self):
+        host = self._page_shell('log', scrollable=False)
 
-    # ── Section Progression ───────────────────────────────────────────────────
+        toolbar = tk.Frame(host, bg=self.BG)
+        toolbar.pack(fill='x', pady=(0, 10))
 
-    def _build_progress_section(self, parent):
-        frm = ttk.LabelFrame(parent, text=self.t('progress_section'), padding=8)
-        frm.pack(fill='x', pady=(0, 6))
+        self.log_filter_var = tk.StringVar(value=self._log_filter)
+        self._filter_btns = {}
+        segment = tk.Frame(toolbar, bg=self.BORDER, padx=1, pady=1)
+        segment.pack(side='left')
+        for value, key in (('all', 'log_filter_all'), ('warn', 'log_filter_warn'),
+                           ('error', 'log_filter_err')):
+            btn = tk.Label(segment, text=self.t(key), bg=self.CARD, fg=self.SUB,
+                           font=('Segoe UI', 8), padx=13, pady=5, cursor='hand2')
+            btn.pack(side='left')
+            btn.bind('<Button-1>', lambda e, v=value: self._set_log_filter(v))
+            self._filter_btns[value] = btn
 
-        # Indicateur d'étapes (7 pastilles)
-        chips_row = tk.Frame(frm, bg=self.BG)
-        chips_row.pack(fill='x', pady=(0, 5))
-        self.step_chips: list[tk.Label] = []
-        for i in range(1, self.STEP_COUNT + 1):
-            chip = tk.Label(chips_row, text=f"{i}·{self.t(f'step_chip_{i}')}",
-                            bg=self.SURFACE, fg=self.SUB,
-                            font=('Segoe UI', 8), padx=4, pady=2)
-            chip.pack(side='left', expand=True, fill='x', padx=1)
-            self.step_chips.append(chip)
+        ttk.Button(toolbar, text=self.t('btn_clear_log'), style='Ghost.TButton',
+                   command=self._clear_log).pack(side='right')
+        ttk.Button(toolbar, text=self.t('btn_save_log'), style='Ghost.TButton',
+                   command=self._save_log).pack(side='right', padx=(0, 6))
+        ttk.Button(toolbar, text=self.t('btn_copy_log'), style='Ghost.TButton',
+                   command=self._copy_log).pack(side='right', padx=(0, 6))
 
-        bar_row = ttk.Frame(frm)
-        bar_row.pack(fill='x')
+        shell = tk.Frame(host, bg=self.BORDER, padx=1, pady=1)
+        shell.pack(fill='both', expand=True)
+        inner = tk.Frame(shell, bg=self.LOG_BG)
+        inner.pack(fill='both', expand=True)
+        self.log_box = tk.Text(
+            inner, bg=self.LOG_BG, fg=self.FG, insertbackground=self.FG,
+            font=('Consolas', 9), state='disabled', relief='flat',
+            borderwidth=0, highlightthickness=0, padx=12, pady=10, wrap='none',
+            selectbackground=self.ACCENT, selectforeground=self.ON_ACCENT,
+        )
+        log_bar = ttk.Scrollbar(inner, orient='vertical',
+                                command=self.log_box.yview)
+        self.log_box.configure(yscrollcommand=log_bar.set)
+        log_bar.pack(side='right', fill='y')
+        self.log_box.pack(side='left', fill='both', expand=True)
+
+        self.log_box.tag_configure('header', foreground=self.ACCENT,
+                                   font=('Consolas', 9, 'bold'))
+        self.log_box.tag_configure('success', foreground=self.GREEN)
+        self.log_box.tag_configure('warning', foreground=self.YELLOW)
+        self.log_box.tag_configure('error', foreground=self.RED)
+        self.log_box.tag_configure('info', foreground=self.FG)
+        self._paint_log_filter()
+
+    def _build_action_bar(self):
+        tk.Frame(self.root, bg=self.BORDER, height=1).pack(side='bottom', fill='x')
+        bar = tk.Frame(self.root, bg=self.SIDEBAR)
+        bar.pack(side='bottom', fill='x')
+
+        self.pipe_canvas = tk.Canvas(bar, height=52, bg=self.SIDEBAR,
+                                     highlightthickness=0)
+        self.pipe_canvas.pack(fill='x', padx=20, pady=(10, 0))
+        self.pipe_canvas.bind('<Configure>', lambda e: self._draw_pipeline())
+
+        status = tk.Frame(bar, bg=self.SIDEBAR)
+        status.pack(fill='x', padx=20, pady=(2, 0))
+
+        self.status_dot_lbl = tk.Label(status, text="●", bg=self.SIDEBAR,
+                                       fg=self.SUB, font=('Segoe UI', 9))
+        self.status_dot_lbl.pack(side='left', padx=(0, 6))
+        self.status_var = tk.StringVar(value=self.t('status_ready'))
+        tk.Label(status, textvariable=self.status_var, bg=self.SIDEBAR,
+                 fg=self.FG, font=('Segoe UI', 9)).pack(side='left')
+        self.elapsed_var = tk.StringVar(value="")
+        tk.Label(status, textvariable=self.elapsed_var, bg=self.SIDEBAR,
+                 fg=self.SUB, font=('Segoe UI', 8)).pack(side='left', padx=(12, 0))
+        self.file_var = tk.StringVar(value="")
+        tk.Label(status, textvariable=self.file_var, bg=self.SIDEBAR,
+                 fg=self.SUB, font=('Consolas', 8)).pack(side='right')
+
+        controls = tk.Frame(bar, bg=self.SIDEBAR)
+        controls.pack(fill='x', padx=20, pady=(7, 14))
 
         self.prog_var = tk.DoubleVar(value=0)
-        ttk.Progressbar(bar_row, variable=self.prog_var, maximum=100).pack(side='left', fill='x', expand=True)
-
+        ttk.Progressbar(controls, variable=self.prog_var, maximum=100).pack(
+            side='left', fill='x', expand=True, pady=(0, 1))
         self.prog_pct_var = tk.StringVar(value="0%")
-        ttk.Label(bar_row, textvariable=self.prog_pct_var, width=5, anchor='e',
-                  foreground=self.ACCENT, font=('Segoe UI', 9, 'bold')).pack(side='left', padx=(8, 0))
+        tk.Label(controls, textvariable=self.prog_pct_var, bg=self.SIDEBAR,
+                 fg=self.ACCENT, font=('Segoe UI', 9, 'bold'), width=5,
+                 anchor='e').pack(side='left', padx=(10, 18))
 
-        status_row = ttk.Frame(frm)
-        status_row.pack(fill='x', pady=(3, 0))
+        self.run_btn = ttk.Button(controls, text=self.t('btn_run'),
+                                  command=self._start, style='Accent.TButton')
+        self.run_btn.pack(side='right')
+        self.stop_btn = ttk.Button(controls, text=self.t('btn_cancel'),
+                                   command=self._cancel, state='disabled')
+        self.stop_btn.pack(side='right', padx=(0, 8))
+        self.report_btn = ttk.Button(controls, text=self.t('report_open'),
+                                     style='Ghost.TButton',
+                                     command=self._open_report, state='disabled')
+        self.report_btn.pack(side='right', padx=(0, 8))
+        self.open_btn = ttk.Button(controls, text=self.t('btn_open_output'),
+                                   style='Ghost.TButton',
+                                   command=self._open_output, state='disabled')
+        self.open_btn.pack(side='right', padx=(0, 6))
 
-        self.status_dot_lbl = tk.Label(status_row, text="●", bg=self.BG, fg=self.SUB,
-                                        font=('Segoe UI', 10))
-        self.status_dot_lbl.pack(side='left', padx=(0, 4))
+        tk.Label(bar, text=self.t('shortcuts_hint'), bg=self.SIDEBAR, fg=self.SUB,
+                 font=('Segoe UI', 7)).pack(side='bottom', anchor='w',
+                                            padx=20, pady=(0, 6))
 
-        self.status_var = tk.StringVar(value=self.t('status_ready'))
-        ttk.Label(status_row, textvariable=self.status_var,
-                  foreground=self.SUB).pack(side='left')
+    def _draw_pipeline(self):
+        canvas = getattr(self, 'pipe_canvas', None)
+        if canvas is None:
+            return
+        canvas.delete('all')
+        width = max(canvas.winfo_width(), 120)
+        count = self.STEP_COUNT
+        slot = width / count
+        cy, radius = 14, 10
 
-        self.elapsed_var = tk.StringVar(value="")
-        ttk.Label(status_row, textvariable=self.elapsed_var,
-                  foreground=self.SUB, font=('Segoe UI', 8)).pack(side='left', padx=(10, 0))
+        for i in range(1, count + 1):
+            cx = slot * (i - 0.5)
+            done = self._steps_done or i < self._step_state
+            current = not self._steps_done and i == self._step_state
 
-        self.file_var = tk.StringVar(value="")
-        ttk.Label(status_row, textvariable=self.file_var,
-                  foreground=self.SUB, font=('Consolas', 8)).pack(side='right')
+            if i < count:
+                canvas.create_line(cx + radius + 3, cy, cx + slot - radius - 3, cy,
+                                   fill=self.GREEN if done else self.BORDER,
+                                   width=2)
+
+            if done:
+                fill, outline, text, text_fill = (self.GREEN, self.GREEN, "✓",
+                                                  self.ON_ACCENT)
+            elif current:
+                fill, outline, text, text_fill = (self.ACCENT, self.ACCENT, str(i),
+                                                  self.ON_ACCENT)
+            else:
+                fill, outline, text, text_fill = (self.SIDEBAR, self.BORDER,
+                                                  str(i), self.SUB)
+
+            canvas.create_oval(cx - radius, cy - radius, cx + radius, cy + radius,
+                               fill=fill, outline=outline, width=2)
+            canvas.create_text(cx, cy, text=text, fill=text_fill,
+                               font=('Segoe UI', 8, 'bold'))
+            canvas.create_text(cx, cy + radius + 12,
+                               text=self.t(f'step_chip_{i}'),
+                               fill=self.FG if (done or current) else self.SUB,
+                               font=('Segoe UI', 8,
+                                     'bold' if current else 'normal'))
 
     def _reset_steps(self):
-        for chip in self.step_chips:
-            chip.configure(bg=self.SURFACE, fg=self.SUB)
+        self._step_state = 0
+        self._steps_done = False
+        self._draw_pipeline()
 
     def _set_step(self, n: int):
-        def _do():
-            for i, chip in enumerate(self.step_chips, 1):
-                if i < n:
-                    chip.configure(bg=self.GREEN, fg=THEMES['dark']['LOG_BG'])
-                elif i == n:
-                    chip.configure(bg=self.ACCENT, fg=THEMES['dark']['LOG_BG'])
-                else:
-                    chip.configure(bg=self.SURFACE, fg=self.SUB)
-        self._ui(_do)
+        def apply():
+            self._step_state = n
+            self._steps_done = False
+            self._draw_pipeline()
+        self._ui(apply)
 
     def _finish_steps(self, success: bool):
         if success:
-            for chip in self.step_chips:
-                chip.configure(bg=self.GREEN, fg=THEMES['dark']['LOG_BG'])
-
-    # ── Section Journal ───────────────────────────────────────────────────────
-
-    def _build_log_section(self, parent):
-        frm = ttk.LabelFrame(parent, text=self.t('log_section'), padding=8)
-        frm.pack(fill='both', expand=True, pady=(0, 6))
-
-        toolbar = ttk.Frame(frm)
-        toolbar.pack(fill='x', pady=(0, 5))
-
-        self.log_filter_var = tk.StringVar(value='all')
-        for value, key in (('all', 'log_filter_all'),
-                           ('warn', 'log_filter_warn'),
-                           ('error', 'log_filter_err')):
-            rb = tk.Radiobutton(toolbar, text=self.t(key),
-                                variable=self.log_filter_var, value=value,
-                                indicatoron=0, command=self._refilter_log,
-                                bg=self.SURFACE, fg=self.FG,
-                                selectcolor=self.ACCENT,
-                                activebackground=self.BTN_ACTIVE,
-                                activeforeground=self.FG,
-                                relief='flat', bd=0, highlightthickness=0,
-                                padx=9, pady=2, font=('Segoe UI', 8))
-            rb.pack(side='left', padx=(0, 3))
-
-        ttk.Button(toolbar, text=self.t('btn_save_log'), style='Small.TButton',
-                   command=self._save_log).pack(side='right')
-        ttk.Button(toolbar, text=self.t('btn_copy_log'), style='Small.TButton',
-                   command=self._copy_log).pack(side='right', padx=(0, 4))
-
-        self.log_box = scrolledtext.ScrolledText(
-            frm, height=9,
-            bg=self.LOG_BG, fg=self.FG,
-            insertbackground=self.FG,
-            font=('Consolas', 9),
-            state='disabled',
-            relief='flat', borderwidth=0,
-            selectbackground=self.ACCENT,
-            selectforeground=self.BG,
-        )
-        self.log_box.pack(fill='both', expand=True)
-
-        self.log_box.tag_configure('header',  foreground=self.ACCENT, font=('Consolas', 9, 'bold'))
-        self.log_box.tag_configure('success', foreground=self.GREEN)
-        self.log_box.tag_configure('warning', foreground=self.YELLOW)
-        self.log_box.tag_configure('error',   foreground=self.RED)
-        self.log_box.tag_configure('info',    foreground=self.FG)
-
-    def _build_buttons(self, parent):
-        ttk.Label(parent, text=self.t('shortcuts_hint'),
-                  foreground=self.SUB, font=('Segoe UI', 7)
-                  ).pack(side='bottom', anchor='w', pady=(4, 0))
-
-        row = ttk.Frame(parent)
-        row.pack(side='bottom', fill='x')
-
-        ttk.Button(row, text=self.t('btn_clear_log'),
-                   command=self._clear_log).pack(side='left')
-
-        self.open_btn = ttk.Button(row, text=self.t('btn_open_output'),
-                                   command=self._open_output, state='disabled')
-        self.open_btn.pack(side='left', padx=(6, 0))
-
-        self.report_btn = ttk.Button(row, text=self.t('report_open'),
-                                     command=self._open_report, state='disabled')
-        self.report_btn.pack(side='left', padx=(6, 0))
-
-        self.stop_btn = ttk.Button(row, text=self.t('btn_cancel'),
-                                   command=self._cancel, state='disabled')
-        self.stop_btn.pack(side='right', padx=(4, 0))
-
-        self.run_btn = ttk.Button(row, text=self.t('btn_run'),
-                                  command=self._start, style='Accent.TButton')
-        self.run_btn.pack(side='right')
-
-    # ── Raccourcis clavier ────────────────────────────────────────────────────
+            self._steps_done = True
+            self._draw_pipeline()
 
     def _bind_shortcuts(self):
         self.root.bind('<Control-o>', lambda e: self._browse_source())
         self.root.bind('<Control-Return>', lambda e: self._start_if_idle())
         self.root.bind('<Escape>', lambda e: self._cancel_if_running())
+        self.root.bind_all('<MouseWheel>', self._on_wheel)
+        self.root.bind_all('<Button-4>', self._on_wheel)
+        self.root.bind_all('<Button-5>', self._on_wheel)
+
+    def _on_wheel(self, event):
+        area = self.scrolls.get(self._page)
+        if area is None:
+            return
+        num = getattr(event, 'num', None)
+        if num == 4:
+            units = -1
+        elif num == 5:
+            units = 1
+        else:
+            units = -1 if getattr(event, 'delta', 0) > 0 else 1
+        area.scroll(units)
 
     def _start_if_idle(self):
         if str(self.run_btn['state']) != 'disabled':
@@ -754,8 +1013,6 @@ class App:
     def _cancel_if_running(self):
         if str(self.stop_btn['state']) != 'disabled':
             self._cancel()
-
-    # ── Callbacks ─────────────────────────────────────────────────────────────
 
     def _toggle_tex(self):
         self._set_sub_state(self.tex_sub, self.comp_tex.get())
@@ -766,21 +1023,30 @@ class App:
     def _toggle_lua(self):
         self._set_sub_state(self.lua_sub, self.gen_lua.get())
 
-    @staticmethod
-    def _set_sub_state(frame, enabled: bool):
+    def _toggle_target_size(self):
+        self.target_size_entry.configure(
+            state='normal' if self.target_size_enabled.get() else 'disabled')
+
+    def _set_sub_state(self, frame, enabled: bool):
         state = 'normal' if enabled else 'disabled'
-        for widget in frame.winfo_children():
-            children = widget.winfo_children()
-            targets = children if children else [widget]
-            for w in targets:
+        color = self.FG if enabled else self.SUB
+
+        def walk(widget):
+            for child in widget.winfo_children():
                 try:
-                    w.configure(state=state)
+                    if isinstance(child, tk.Label):
+                        child.configure(fg=color)
+                    else:
+                        child.configure(state=state)
                 except tk.TclError:
                     pass
+                walk(child)
+
+        walk(frame)
 
     def _apply_profile(self, _event=None):
-        pid = self._profile_label_to_id.get(self.profile_var.get())
-        preset = self.PRESETS.get(pid)
+        preset = self.PRESETS.get(
+            self._profile_label_to_id.get(self.profile_var.get()))
         if preset is None:
             return
         self.rem_chands.set(preset['remove_chands'])
@@ -797,56 +1063,57 @@ class App:
         self._toggle_snd()
         self._toggle_lua()
 
-    # ── Analyse de la source ──────────────────────────────────────────────────
-
     def _scan_source(self):
-        src = self.source_var.get().strip()
-        if not src or not Path(src).exists():
+        source = self.source_var.get().strip()
+        if not source or not Path(source).exists():
             self.stats_var.set("")
             self._drop_stats_line = ""
             self._draw_drop_zone()
             return
         self.stats_var.set(self.t('stats_analyzing'))
-        threading.Thread(target=self._scan_source_thread, args=(src,), daemon=True).start()
+        threading.Thread(target=self._scan_source_thread, args=(source,),
+                         daemon=True).start()
 
-    def _scan_source_thread(self, src: str):
+    def _scan_source_thread(self, source: str):
         try:
-            p = Path(src)
-            if p.is_file():
-                text = self.t('stats_source_file', size=Compressor._fmt_size(p.stat().st_size))
+            path = Path(source)
+            if path.is_file():
+                text = self.t('stats_source_file',
+                              size=Compressor._fmt_size(path.stat().st_size))
                 detail = ""
             else:
                 count = total = tex = snd = mdl = 0
-                for fp in p.rglob('*'):
-                    if not fp.is_file():
+                for entry in path.rglob('*'):
+                    if not entry.is_file():
                         continue
                     count += 1
-                    total += fp.stat().st_size
-                    ext = fp.suffix.lower()
+                    total += entry.stat().st_size
+                    ext = entry.suffix.lower()
                     if ext in TEXTURE_EXTENSIONS:
                         tex += 1
                     elif ext in SOUND_EXTENSIONS:
                         snd += 1
                     elif ext == '.mdl':
                         mdl += 1
-                text = self.t('stats_source', count=count, size=Compressor._fmt_size(total))
+                text = self.t('stats_source', count=count,
+                              size=Compressor._fmt_size(total))
                 detail = self.t('stats_breakdown', tex=tex, snd=snd, mdl=mdl)
         except OSError:
             text, detail = "", ""
 
-        def _apply():
+        def apply():
             self.stats_var.set(text)
             self._drop_stats_line = detail
             self._draw_drop_zone()
-        self.root.after(0, _apply)
 
-    # ── Sélection source / sortie ─────────────────────────────────────────────
+        self._ui(apply)
 
     def _browse_source(self):
         if self.src_type.get() == 'gma':
             path = filedialog.askopenfilename(
                 title=self.t('dialog_select_gma'),
-                filetypes=[(self.t('filetype_gma'), "*.gma"), (self.t('filetype_all'), "*.*")],
+                filetypes=[(self.t('filetype_gma'), "*.gma"),
+                           (self.t('filetype_all'), "*.*")],
             )
         else:
             path = filedialog.askdirectory(title=self.t('dialog_select_folder'))
@@ -855,24 +1122,25 @@ class App:
 
     def _set_source(self, path: str):
         self.source_var.set(path)
-        p = Path(path)
-        if p.suffix.lower() == '.gma':
+        entry = Path(path)
+        if entry.suffix.lower() == '.gma':
             self.src_type.set('gma')
-        elif p.is_dir():
+        elif entry.is_dir():
             self.src_type.set('folder')
         if not self.output_var.get():
-            self.output_var.set(str(p.parent / (p.stem + '_compressed')))
+            self.output_var.set(str(entry.parent / (entry.stem + '_compressed')))
         self._push_recent(path)
         self._scan_source()
 
     def _push_recent(self, path: str):
-        self._recent = [path] + [p for p in self._recent if p != path]
-        self._recent = self._recent[:MAX_RECENT_SOURCES]
+        self._recent = ([path] + [p for p in self._recent if p != path])[
+            :MAX_RECENT_SOURCES]
 
     def _show_recent_menu(self):
-        menu = tk.Menu(self.root, tearoff=0, bg=self.SURFACE, fg=self.FG,
-                       activebackground=self.ACCENT, activeforeground=self.BG,
-                       font=('Segoe UI', 9))
+        menu = tk.Menu(self.root, tearoff=0, bg=self.CARD, fg=self.FG,
+                       activebackground=self.ACCENT,
+                       activeforeground=self.ON_ACCENT,
+                       borderwidth=0, font=('Segoe UI', 9))
         if not self._recent:
             menu.add_command(label=self.t('no_recent'), state='disabled')
         else:
@@ -891,36 +1159,33 @@ class App:
             path = filedialog.askdirectory(title=self.t('dialog_output_folder'))
         elif fmt == 'gma':
             path = filedialog.asksaveasfilename(
-                title=self.t('dialog_save_gma'),
-                defaultextension='.gma',
-                filetypes=[(self.t('filetype_gma'), "*.gma")],
-            )
+                title=self.t('dialog_save_gma'), defaultextension='.gma',
+                filetypes=[(self.t('filetype_gma'), "*.gma")])
         else:
             path = filedialog.asksaveasfilename(
-                title=self.t('dialog_save_zip'),
-                defaultextension='.zip',
-                filetypes=[(self.t('filetype_zip'), "*.zip")],
-            )
+                title=self.t('dialog_save_zip'), defaultextension='.zip',
+                filetypes=[(self.t('filetype_zip'), "*.zip")])
         if path:
             self.output_var.set(path)
 
-    # ── Lancement / suivi de la compression ───────────────────────────────────
-
     def _start(self):
-        src = self.source_var.get().strip()
-        out = self.output_var.get().strip()
+        source = self.source_var.get().strip()
+        output = self.output_var.get().strip()
 
-        if not src:
+        if not source:
+            self._show_page('source')
             messagebox.showwarning(self.t('msg_source_missing_title'),
                                    self.t('msg_source_missing_body'))
             return
-        if not out:
+        if not output:
+            self._show_page('source')
             messagebox.showwarning(self.t('msg_output_missing_title'),
                                    self.t('msg_output_missing_body'))
             return
-        if not Path(src).exists():
+        if not Path(source).exists():
+            self._show_page('source')
             messagebox.showerror(self.t('msg_source_not_found_title'),
-                                 self.t('msg_source_not_found_body', src=src))
+                                 self.t('msg_source_not_found_body', src=source))
             return
 
         target_size_mb = None
@@ -928,15 +1193,16 @@ class App:
             try:
                 target_size_mb = float(self.target_size_mb.get().replace(',', '.'))
             except ValueError:
+                self._show_page('advanced')
                 messagebox.showwarning(self.t('msg_invalid_target_size_title'),
                                        self.t('msg_invalid_target_size_body'))
                 return
 
-        self._push_recent(src)
+        self._push_recent(source)
 
         opts = {
-            'source':            src,
-            'output':            out,
+            'source':            source,
+            'output':            output,
             'source_type':       self.src_type.get(),
             'output_format':     self.out_fmt.get(),
             'remove_chands':     self.rem_chands.get(),
@@ -966,13 +1232,16 @@ class App:
         self.stop_btn.configure(state='normal')
         self.open_btn.configure(state='disabled')
         self.report_btn.configure(state='disabled')
-        self.theme_btn.configure(state='disabled')
-        self.lang_btn.configure(state='disabled')
+        self._set_header_enabled(self.theme_btn, False)
+        self._set_header_enabled(self.lang_btn, False)
         self.prog_var.set(0)
         self.prog_pct_var.set("0%")
         self.file_var.set("")
         self.status_dot_lbl.configure(fg=self.ACCENT)
+        self._counts = {'warning': 0, 'error': 0}
+        self._paint_nav_badge()
         self._reset_steps()
+        self._show_page('log')
         self._run_started = time.time()
         self._tick_elapsed()
 
@@ -994,8 +1263,7 @@ class App:
     def _tick_elapsed(self):
         if self._run_started is None:
             return
-        elapsed = int(time.time() - self._run_started)
-        mins, secs = divmod(elapsed, 60)
+        mins, secs = divmod(int(time.time() - self._run_started), 60)
         self.elapsed_var.set(f"⏱ {mins:02d}:{secs:02d}")
         self._timer_job = self.root.after(500, self._tick_elapsed)
 
@@ -1019,8 +1287,8 @@ class App:
         self._run_started = None
         self.run_btn.configure(state='normal')
         self.stop_btn.configure(state='disabled')
-        self.theme_btn.configure(state='normal')
-        self.lang_btn.configure(state='normal')
+        self._set_header_enabled(self.theme_btn, True)
+        self._set_header_enabled(self.lang_btn, True)
         self.file_var.set("")
         comp = self._compressor
         if comp and comp.final_size is not None:
@@ -1029,7 +1297,8 @@ class App:
                 self.report_btn.configure(state='normal')
             before = Compressor._fmt_size(comp.original_size)
             after = Compressor._fmt_size(comp.final_size)
-            self.stats_var.set(self.t('stats_done', before=before, after=after, pct=f"{comp.reduction:.1f}"))
+            self.stats_var.set(self.t('stats_done', before=before, after=after,
+                                      delta=self._delta_label(comp.reduction)))
             self.status_dot_lbl.configure(fg=self.GREEN)
             self._finish_steps(True)
             self._show_summary(comp, before, after, elapsed)
@@ -1038,80 +1307,139 @@ class App:
         else:
             self.status_dot_lbl.configure(fg=self.RED)
 
-    # ── Fenêtre récapitulative ────────────────────────────────────────────────
+    @staticmethod
+    def _delta_label(reduction: float | None) -> str:
+        if reduction is None:
+            return "—"
+        sign = '-' if reduction >= 0 else '+'
+        return f"{sign}{abs(reduction):.1f}%"
 
-    def _show_summary(self, comp: 'Compressor', before: str, after: str, elapsed: str):
-        """Affiche un récapitulatif convivial à la fin d'une compression réussie."""
-        saved = Compressor._fmt_size(max(0, (comp.original_size or 0) - (comp.final_size or 0)))
-        pct = f"{comp.reduction:.1f}"
-        body = self.t('summary_body', before=before, after=after, saved=saved, pct=pct)
-        if elapsed:
-            body += "\n" + self.t('summary_elapsed', dur=elapsed)
-        if comp.opts.get('dry_run'):
-            messagebox.showinfo(self.t('summary_title'), body + "\n\n" + self.t('summary_dry_run'))
-            return
-
-        report_path = getattr(comp, 'report_path', None)
-
+    def _dialog(self, title: str, width: int | None = None):
         win = tk.Toplevel(self.root)
-        win.title(self.t('summary_title'))
+        win.title(title)
         win.configure(bg=self.BG)
         win.transient(self.root)
         win.resizable(False, False)
-
-        wrap = tk.Frame(win, bg=self.BG, padx=24, pady=20)
+        wrap = tk.Frame(win, bg=self.BG, padx=26, pady=22)
         wrap.pack(fill='both', expand=True)
+        if width:
+            wrap.configure(width=width)
+        return win, wrap
 
-        tk.Label(wrap, text=self.t('summary_title'), bg=self.BG, fg=self.ACCENT,
-                 font=('Segoe UI', 14, 'bold')).pack(anchor='w')
-
-        # Barres avant / après
-        bar_w, bar_h, row_h = 280, 13, 24
-        original = max(1, comp.original_size or 1)
-        ratio = min(1.0, max(0.02, (comp.final_size or 0) / original))
-        canvas = tk.Canvas(wrap, width=bar_w + 140, height=row_h * 2 + 6,
-                           bg=self.BG, highlightthickness=0)
-        canvas.pack(anchor='w', pady=(12, 4))
-        canvas.create_rectangle(0, 4, bar_w, 4 + bar_h, fill=self.SURFACE, outline='')
-        canvas.create_text(bar_w + 8, 4 + bar_h / 2, anchor='w',
-                           text=before, fill=self.SUB, font=('Segoe UI', 8))
-        y2 = row_h + 6
-        canvas.create_rectangle(0, y2, bar_w * ratio, y2 + bar_h,
-                                fill=self.GREEN, outline='')
-        canvas.create_text(bar_w + 8, y2 + bar_h / 2, anchor='w',
-                           text=f"{after}  (-{pct}%)",
-                           fill=self.GREEN, font=('Segoe UI', 8, 'bold'))
-
-        tk.Label(wrap, text=body, bg=self.BG, fg=self.FG, justify='left',
-                 font=('Segoe UI', 10)).pack(anchor='w', pady=(6, 16))
-
-        btn_row = tk.Frame(wrap, bg=self.BG)
-        btn_row.pack(fill='x')
-        ttk.Button(btn_row, text=self.t('summary_open_folder'),
-                   style='Accent.TButton',
-                   command=lambda: (win.destroy(), self._open_output())
-                   ).pack(side='left')
-        if report_path and Path(report_path).exists():
-            ttk.Button(btn_row, text=self.t('report_open'),
-                       command=lambda: self._open_path(report_path)
-                       ).pack(side='left', padx=(8, 0))
-        ttk.Button(btn_row, text=self.t('summary_close'),
-                   command=win.destroy).pack(side='right')
-
+    def _center_dialog(self, win):
         win.update_idletasks()
         x = self.root.winfo_rootx() + (self.root.winfo_width() - win.winfo_width()) // 2
         y = self.root.winfo_rooty() + (self.root.winfo_height() - win.winfo_height()) // 2
         win.geometry(f"+{max(0, x)}+{max(0, y)}")
         win.grab_set()
 
+    def _show_summary(self, comp: 'Compressor', before: str, after: str,
+                      elapsed: str):
+        saved = Compressor._fmt_size(
+            max(0, (comp.original_size or 0) - (comp.final_size or 0)))
+        shrank = (comp.reduction or 0) >= 0
+        delta = self._delta_label(comp.reduction)
+        body = self.t('summary_body', before=before, after=after, saved=saved,
+                      delta=delta)
+        if elapsed:
+            body += "\n" + self.t('summary_elapsed', dur=elapsed)
+        if comp.opts.get('dry_run'):
+            messagebox.showinfo(self.t('summary_title'),
+                                body + "\n\n" + self.t('summary_dry_run'))
+            return
+
+        report_path = getattr(comp, 'report_path', None)
+        win, wrap = self._dialog(self.t('summary_title'))
+
+        tk.Label(wrap, text=self.t('summary_title'), bg=self.BG, fg=self.FG,
+                 font=('Segoe UI', 15, 'bold')).pack(anchor='w')
+
+        bar_w, bar_h, row_h = 300, 15, 27
+        original = max(1, comp.original_size or 1)
+        ratio = min(1.0, max(0.02, (comp.final_size or 0) / original))
+        canvas = tk.Canvas(wrap, width=bar_w + 150, height=row_h * 2 + 8,
+                           bg=self.BG, highlightthickness=0)
+        canvas.pack(anchor='w', pady=(16, 6))
+        canvas.create_rectangle(0, 4, bar_w, 4 + bar_h, fill=self.BORDER,
+                                outline='')
+        canvas.create_text(bar_w + 10, 4 + bar_h / 2, anchor='w', text=before,
+                           fill=self.SUB, font=('Segoe UI', 8))
+        y2 = row_h + 6
+        tone = self.GREEN if shrank else self.YELLOW
+        canvas.create_rectangle(0, y2, bar_w * ratio, y2 + bar_h, fill=tone,
+                                outline='')
+        canvas.create_text(bar_w + 10, y2 + bar_h / 2, anchor='w',
+                           text=f"{after}  ({delta})", fill=tone,
+                           font=('Segoe UI', 8, 'bold'))
+
+        tk.Label(wrap, text=body, bg=self.BG, fg=self.FG, justify='left',
+                 font=('Segoe UI', 10)).pack(anchor='w', pady=(8, 18))
+
+        row = tk.Frame(wrap, bg=self.BG)
+        row.pack(fill='x')
+        ttk.Button(row, text=self.t('summary_open_folder'), style='Accent.TButton',
+                   command=lambda: (win.destroy(), self._open_output())).pack(
+            side='left')
+        if report_path and Path(report_path).exists():
+            ttk.Button(row, text=self.t('report_open'),
+                       command=lambda: self._open_path(report_path)).pack(
+                side='left', padx=(8, 0))
+        ttk.Button(row, text=self.t('summary_close'), command=win.destroy).pack(
+            side='right')
+
+        self._center_dialog(win)
+
+    def _show_about(self):
+        win, wrap = self._dialog(self.t('about_title'))
+
+        head = tk.Frame(wrap, bg=self.BG)
+        head.pack(anchor='w')
+        tk.Label(head, text="🗜", bg=self.BG, fg=self.ACCENT,
+                 font=('Segoe UI', 22)).pack(side='left', padx=(0, 12))
+        titles = tk.Frame(head, bg=self.BG)
+        titles.pack(side='left')
+        tk.Label(titles, text="Compressez PM GMod", bg=self.BG, fg=self.FG,
+                 font=('Segoe UI', 14, 'bold')).pack(anchor='w')
+        tk.Label(titles, text=f"v{VERSION}  ·  {self.t('sidebar_oss')}",
+                 bg=self.BG, fg=self.SUB, font=('Segoe UI', 9)).pack(anchor='w')
+
+        tk.Label(wrap, text=self.t('about_intro'), bg=self.BG, fg=self.FG,
+                 justify='left', font=('Segoe UI', 9)).pack(anchor='w',
+                                                            pady=(16, 12))
+
+        link = tk.Label(wrap, text=REPO_URL, bg=self.BG, fg=self.ACCENT,
+                        font=('Segoe UI', 9, 'underline'), cursor='hand2')
+        link.pack(anchor='w')
+        link.bind('<Button-1>', lambda e: self._open_repo())
+
+        tk.Frame(wrap, bg=self.BORDER, height=1).pack(fill='x', pady=14)
+
+        tk.Label(wrap, text=self.t('sidebar_libs'), bg=self.BG, fg=self.SUB,
+                 font=('Segoe UI', 8, 'bold')).pack(anchor='w')
+        for name, ok in ((self.t('lib_pillow'), PIL_AVAILABLE),
+                         (self.t('lib_vtflib'), VTFLIB_AVAILABLE),
+                         (self.t('lib_ffmpeg'), FFMPEG_AVAILABLE)):
+            tk.Label(wrap, text=f"{'✓' if ok else '✗'}  {name}", bg=self.BG,
+                     fg=self.GREEN if ok else self.SUB,
+                     font=('Segoe UI', 9)).pack(anchor='w')
+
+        ttk.Button(wrap, text=self.t('summary_close'), command=win.destroy).pack(
+            anchor='e', pady=(18, 0))
+        self._center_dialog(win)
+
+    def _open_repo(self):
+        try:
+            webbrowser.open(REPO_URL)
+        except Exception:
+            pass
+
     def _cancel(self):
         if self._compressor:
             self._compressor.cancel()
 
     def _open_output(self):
-        out = Path(self.output_var.get().strip())
-        target = out if out.is_dir() else out.parent
-        self._open_path(target)
+        output = Path(self.output_var.get().strip())
+        self._open_path(output if output.is_dir() else output.parent)
 
     def _open_report(self):
         comp = self._compressor
@@ -1120,7 +1448,6 @@ class App:
             self._open_path(report_path)
 
     def _open_path(self, target):
-        """Ouvre un fichier ou un dossier avec l'application par défaut de l'OS."""
         target = str(target)
         try:
             if sys.platform == 'win32':
@@ -1130,9 +1457,8 @@ class App:
             else:
                 subprocess.run(['xdg-open', target])
         except Exception as e:
-            messagebox.showerror(self.t('msg_error_title'), self.t('msg_open_folder_error', e=e))
-
-    # ── Journal ───────────────────────────────────────────────────────────────
+            messagebox.showerror(self.t('msg_error_title'),
+                                 self.t('msg_open_folder_error', e=e))
 
     @staticmethod
     def _tag_for(msg: str) -> str:
@@ -1154,17 +1480,44 @@ class App:
             return tag == 'error'
         return True
 
-    def _log(self, msg: str):
-        tag = self._tag_for(msg)
+    def _set_log_filter(self, value: str):
+        self._log_filter = value
+        self.log_filter_var.set(value)
+        self._paint_log_filter()
+        self._refilter_log()
 
-        def _do():
+    def _paint_log_filter(self):
+        active = self.log_filter_var.get()
+        for value, btn in self._filter_btns.items():
+            selected = value == active
+            btn.configure(bg=self.ACCENT if selected else self.CARD,
+                          fg=self.ON_ACCENT if selected else self.SUB,
+                          font=('Segoe UI', 8, 'bold' if selected else 'normal'))
+
+    def _paint_nav_badge(self):
+        _, _, _, badge = self._nav['log']
+        if self._counts['error']:
+            badge.configure(text=str(self._counts['error']), fg=self.RED)
+        elif self._counts['warning']:
+            badge.configure(text=str(self._counts['warning']), fg=self.YELLOW)
+        else:
+            badge.configure(text="")
+
+    def _log(self, msg: str, tag: str | None = None):
+        tag = tag or self._tag_for(msg)
+
+        def apply():
             self._log_entries.append((msg, tag))
+            if tag in self._counts:
+                self._counts[tag] += 1
+                self._paint_nav_badge()
             if self._passes_filter(tag):
                 self.log_box.configure(state='normal')
                 self.log_box.insert('end', msg + '\n', tag)
                 self.log_box.see('end')
                 self.log_box.configure(state='disabled')
-        self._ui(_do)
+
+        self._ui(apply)
 
     def _refilter_log(self):
         self.log_box.configure(state='normal')
@@ -1176,65 +1529,58 @@ class App:
         self.log_box.configure(state='disabled')
 
     def _copy_log(self):
-        text = '\n'.join(msg for msg, _ in self._log_entries)
         self.root.clipboard_clear()
-        self.root.clipboard_append(text)
+        self.root.clipboard_append('\n'.join(m for m, _ in self._log_entries))
         self._set_status(self.t('log_copied'))
 
     def _save_log(self):
         path = filedialog.asksaveasfilename(
-            title=self.t('dialog_save_log'),
-            defaultextension='.txt',
+            title=self.t('dialog_save_log'), defaultextension='.txt',
             filetypes=[(self.t('filetype_log'), "*.txt *.log"),
-                       (self.t('filetype_all'), "*.*")],
-        )
+                       (self.t('filetype_all'), "*.*")])
         if not path:
             return
         try:
-            Path(path).write_text(
-                '\n'.join(msg for msg, _ in self._log_entries), encoding='utf-8')
+            Path(path).write_text('\n'.join(m for m, _ in self._log_entries),
+                                  encoding='utf-8')
             self._log(self.t('log_saved', path=path))
         except OSError as e:
             messagebox.showerror(self.t('msg_error_title'), str(e))
 
     def _set_prog(self, val: float):
-        def _do():
+        def apply():
             self.prog_var.set(val)
             self.prog_pct_var.set(f"{val:.0f}%")
-        self._ui(_do)
+        self._ui(apply)
 
     def _set_status(self, msg: str):
         self._ui(lambda: self.status_var.set(msg))
 
     def _set_current_file(self, name: str):
         display = f"→ {name}" if name else ""
-        if len(display) > 60:
-            display = '…' + display[-59:]
+        if len(display) > 58:
+            display = '…' + display[-57:]
         self._ui(lambda: self.file_var.set(display))
 
     def _clear_log(self):
         self._log_entries.clear()
+        self._counts = {'warning': 0, 'error': 0}
+        self._paint_nav_badge()
         self.log_box.configure(state='normal')
         self.log_box.delete('1.0', 'end')
         self.log_box.configure(state='disabled')
 
     def _log_header(self):
         self._log(self.t('log_app_version', version=VERSION))
-        libs = (
+        self._log(
             f"PIL : {'✓' if PIL_AVAILABLE else '✗'}  |  "
             f"VTFLib : {'✓' if VTFLIB_AVAILABLE else '✗'}  |  "
-            f"ffmpeg : {'✓' if FFMPEG_AVAILABLE else '✗'}"
+            f"ffmpeg : {'✓' if FFMPEG_AVAILABLE else '✗'}",
+            tag='info',
         )
-        self._log(libs)
         if not PIL_AVAILABLE:
-            self._log(self.t('log_install_pillow'))
+            self._log(self.t('log_install_pillow'), tag='info')
         self._log("")
-
-    # ── Bascules thème / langue / taille cible ────────────────────────────────
-
-    def _toggle_target_size(self):
-        state = 'normal' if self.target_size_enabled.get() else 'disabled'
-        self.target_size_entry.configure(state=state)
 
     def _toggle_theme(self):
         self.theme_name = 'light' if self.theme_name == 'dark' else 'dark'
@@ -1245,30 +1591,14 @@ class App:
         self.lang = 'en' if self.lang == 'fr' else 'fr'
         self._rebuild()
 
-    def _show_about(self):
-        lib_status = [
-            (self.t('lib_pillow'), PIL_AVAILABLE),
-            (self.t('lib_vtflib'), VTFLIB_AVAILABLE),
-            (self.t('lib_ffmpeg'), FFMPEG_AVAILABLE),
-        ]
-        libs = "\n".join(
-            self.t('about_lib_yes' if ok else 'about_lib_no', lib=name)
-            for name, ok in lib_status
-        )
-        messagebox.showinfo(
-            self.t('about_title'),
-            self.t('about_body', version=VERSION, libs=libs),
-        )
-
-    # ── État de l'interface ───────────────────────────────────────────────────
-
     def _collect_state(self) -> dict:
         return {
             'source':              self.source_var.get(),
             'output':              self.output_var.get(),
             'src_type':            self.src_type.get(),
             'out_fmt':             self.out_fmt.get(),
-            'profile_id':          self._profile_label_to_id.get(self.profile_var.get(), 'custom'),
+            'profile_id':          self._profile_label_to_id.get(
+                self.profile_var.get(), 'custom'),
             'rem_chands':          self.rem_chands.get(),
             'rem_unused':          self.rem_unused.get(),
             'check_materials':     self.check_materials.get(),
@@ -1291,6 +1621,7 @@ class App:
             'target_size_enabled': self.target_size_enabled.get(),
             'target_size_mb':      self.target_size_mb.get(),
             'batch':               self.batch.get(),
+            'page':                self._page,
         }
 
     def _restore_state(self, state: dict):
@@ -1308,7 +1639,8 @@ class App:
         self.convert_uncompressed.set(state.get('convert_uncompressed', True))
         self.gen_report.set(state.get('gen_report', True))
         self.comp_tex.set(state.get('comp_tex', True))
-        self.max_res.set(self.t('no_limit') if state.get('max_res_no_limit', False) else state.get('max_res', '1024'))
+        self.max_res.set(self.t('no_limit') if state.get('max_res_no_limit', False)
+                         else state.get('max_res', '1024'))
         self.tex_qual.set(state.get('tex_qual', 85))
         self.gen_lua.set(state.get('gen_lua', True))
         self.lua_chands.set(state.get('lua_chands', True))
@@ -1326,8 +1658,6 @@ class App:
         self._toggle_lua()
         self._toggle_target_size()
         self._scan_source()
-
-    # ── Préférences persistantes ──────────────────────────────────────────────
 
     @staticmethod
     def _load_config() -> dict | None:
@@ -1350,36 +1680,39 @@ class App:
     def _on_close(self):
         if self._compressor is not None:
             self._compressor.cancel()
+        self._stop_pump()
+        self._stop_timer()
         self._save_config()
         self.root.destroy()
 
     def _rebuild(self):
         state = self._collect_state()
         entries = list(self._log_entries)
+        counts = dict(self._counts)
+        step_state, steps_done = self._step_state, self._steps_done
 
         for child in self.root.winfo_children():
             child.destroy()
 
         self.root.configure(bg=self.BG)
+        self.pages, self.scrolls = {}, {}
         self._setup_styles()
         self._build_ui()
         self._restore_state(state)
 
         self._log_entries = entries
+        self._counts = counts
+        self._step_state, self._steps_done = step_state, steps_done
+        self._paint_nav_badge()
         self._refilter_log()
-
-    # ── Glisser-déposer ────────────────────────────────────────────────────────
+        self._draw_pipeline()
 
     def _on_drop_source(self, event):
         raw = event.data.strip()
-        if raw.startswith('{'):
-            path = raw[1:raw.index('}')]
-        else:
-            path = raw.split()[0]
+        path = raw[1:raw.index('}')] if raw.startswith('{') else raw.split()[0]
         path = path.strip()
-        if not path:
-            return
-        self._set_source(path)
+        if path:
+            self._set_source(path)
 
     def run(self):
         self.root.mainloop()

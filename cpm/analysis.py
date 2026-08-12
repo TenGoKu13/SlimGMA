@@ -1,7 +1,3 @@
-"""Moteur d'analyse : parsing .mdl/.vmt/.vtf, dépendances, doublons, audit.
-
-Fonctions pures, testables sans GUI ni classe Compressor.
-"""
 import fnmatch
 import re
 import struct
@@ -19,12 +15,10 @@ MODEL_COMPANION_SUFFIXES = (
 
 
 def norm_key(path: str) -> str:
-    """Normalise un chemin d'addon (slashs avant, minuscules, sans slash initial)."""
     return path.replace('\\', '/').lower().lstrip('/')
 
 
 def resolve_material_ref(ref: str) -> str:
-    """Transforme une référence de texture VMT en chemin `materials/....vtf`."""
     ref = ref.strip().strip('"\'').replace('\\', '/').lower().lstrip('/')
     if not ref:
         return ''
@@ -39,7 +33,6 @@ _VMT_KV_RE = re.compile(r'\$(\w+)"?\s+"?([^"\r\n{}]+)"?', re.IGNORECASE)
 
 
 def parse_vmt_refs(text: str) -> dict[str, str]:
-    """Retourne {clé_matériau: chemin_vtf_résolu} pour un contenu .vmt."""
     refs: dict[str, str] = {}
     for m in _VMT_KV_RE.finditer(text):
         key = m.group(1).lower()
@@ -55,7 +48,6 @@ def parse_vmt_refs(text: str) -> dict[str, str]:
 
 
 def _read_cstr(data: bytes, offset: int, limit: int = 260) -> str:
-    """Lit une chaîne C (terminée par \\0) à partir de `offset`."""
     if offset < 0 or offset >= len(data):
         return ''
     end = data.find(b'\x00', offset, offset + limit)
@@ -65,9 +57,6 @@ def _read_cstr(data: bytes, offset: int, limit: int = 260) -> str:
 
 
 def parse_mdl_materials(data: bytes) -> tuple[list[str], list[str]]:
-    """Extrait (noms_de_matériaux, dossiers_cdmaterials) d'un binaire .mdl.
-
-    Renvoie deux listes vides si l'en-tête n'est pas exploitable."""
     if len(data) < 224 or data[:4] != b'IDST':
         return [], []
     try:
@@ -76,7 +65,6 @@ def parse_mdl_materials(data: bytes) -> tuple[list[str], list[str]]:
         numcdtextures  = struct.unpack_from('<i', data, 212)[0]
         cdtextureindex = struct.unpack_from('<i', data, 216)[0]
 
-        # Garde-fous contre des en-têtes corrompus.
         if not (0 <= numtextures < 4096 and 0 <= numcdtextures < 512):
             return [], []
 
@@ -106,7 +94,6 @@ def parse_mdl_materials(data: bytes) -> tuple[list[str], list[str]]:
 
 
 def read_vtf_info(data: bytes) -> dict | None:
-    """Lit l'en-tête d'un .vtf : dimensions, format, mipmaps, version, flags."""
     if len(data) < 63 or data[:4] != b'VTF\x00':
         return None
     try:
@@ -128,21 +115,10 @@ def read_vtf_info(data: bytes) -> dict | None:
 
 
 def build_dependency_graph(files: dict) -> dict:
-    """Construit le graphe d'usage d'un addon.
-
-    Renvoie un dict :
-      reachable            : ensemble des fichiers considérés comme utilisés
-      referenced_vtf       : .vtf référencés par au moins un .vmt
-      referenced_vmt       : .vmt référencés par au moins un .mdl (si parsable)
-      orphan_vtf           : .vtf référencés par aucun .vmt
-      orphan_vmt           : .vmt référencés par aucun .mdl
-      mdl_materials_parsed : True si au moins un .mdl a livré ses matériaux
-    """
     keys = {k for k in files if k != '__meta__'}
     vmt_keys = {k for k in keys if k.endswith('.vmt')}
     vtf_keys = {k for k in keys if k.endswith('.vtf')}
 
-    # 1) .vtf référencés par les .vmt
     referenced_vtf: set[str] = set()
     for vk in vmt_keys:
         try:
@@ -152,7 +128,6 @@ def build_dependency_graph(files: dict) -> dict:
         for resolved in parse_vmt_refs(text).values():
             referenced_vtf.add(resolved)
 
-    # 2) .vmt référencés par les .mdl (via cdmaterials + noms de matériaux)
     referenced_vmt: set[str] = set()
     mdl_materials_parsed = False
     for mk in (k for k in keys if k.endswith('.mdl')):
@@ -167,7 +142,6 @@ def build_dependency_graph(files: dict) -> dict:
                     referenced_vmt.add(cand)
                     break
             else:
-                # Repli : chercher n'importe quel .vmt au nom de base identique.
                 base = name.rsplit('/', 1)[-1]
                 for vk in vmt_keys:
                     if vk.rsplit('/', 1)[-1] == base + '.vmt':
@@ -175,8 +149,6 @@ def build_dependency_graph(files: dict) -> dict:
                         break
 
     orphan_vtf = sorted(vtf_keys - referenced_vtf)
-    # On ne signale des .vmt orphelins que si l'on a réellement pu lire des
-    # matériaux dans au moins un .mdl (sinon risque de faux positifs).
     orphan_vmt = sorted(vmt_keys - referenced_vmt) if mdl_materials_parsed else []
 
     reachable = set(keys)
@@ -194,7 +166,6 @@ def build_dependency_graph(files: dict) -> dict:
 
 
 def find_duplicate_textures(files: dict) -> list[list[str]]:
-    """Groupe les textures dont le contenu binaire est strictement identique."""
     import hashlib
     by_hash: dict[str, list[str]] = {}
     for k, v in files.items():
@@ -205,7 +176,6 @@ def find_duplicate_textures(files: dict) -> list[list[str]]:
     return [sorted(g) for g in by_hash.values() if len(g) > 1]
 
 
-# Formats VTF non compressés (gaspilleurs) que l'on recommande de recompresser.
 VTF_UNCOMPRESSED_FORMATS = {
     'RGBA8888', 'ABGR8888', 'ARGB8888', 'BGRA8888', 'BGRX8888',
     'RGB888', 'BGR888', 'UVLX8888',
@@ -213,21 +183,16 @@ VTF_UNCOMPRESSED_FORMATS = {
 
 
 def is_gma_whitelisted(path: str) -> bool:
-    """Vrai si le chemin serait accepté par Garry's Mod dans un .gma.
-
-    Reproduit le wildcard de gmad : `*` matche n'importe quoi, y compris `/`."""
     key = norm_key(path)
     return any(fnmatch.fnmatchcase(key, pat) for pat in GMA_WHITELIST)
 
 
 def check_gma_whitelist(files: dict) -> list[str]:
-    """Liste (triée) des fichiers que GMod refuserait au montage du .gma."""
     return sorted(k for k in files
                   if k != '__meta__' and not is_gma_whitelisted(k))
 
 
 def _vtf_ref_form(vtf_key: str) -> str:
-    """Chemin .vtf -> forme de référence VMT (`materials/x/y.vtf` -> `x/y`)."""
     ref = vtf_key
     if ref.startswith('materials/'):
         ref = ref[len('materials/'):]
@@ -237,16 +202,6 @@ def _vtf_ref_form(vtf_key: str) -> str:
 
 
 def dedup_textures(files: dict) -> dict:
-    """Fusionne les .vtf strictement identiques en réécrivant les .vmt.
-
-    Pour chaque groupe de doublons, une seule copie est conservée ; toutes les
-    références des .vmt vers les autres copies sont réécrites vers celle-ci,
-    puis les copies supprimées. Modifie `files` en place.
-
-    Renvoie {'removed': [...], 'kept': {dup: kept}, 'rewritten_vmt': [...],
-             'saved': octets}."""
-    # Textures déjà référencées par un .vmt : on privilégie leur chemin comme
-    # copie conservée pour minimiser les réécritures.
     referenced: set[str] = set()
     for vk in (k for k in files if k.endswith('.vmt')):
         try:
@@ -255,7 +210,7 @@ def dedup_textures(files: dict) -> dict:
             continue
         referenced.update(parse_vmt_refs(text).values())
 
-    dup_map: dict[str, str] = {}   # doublon -> copie conservée
+    dup_map: dict[str, str] = {}
     for group in find_duplicate_textures(files):
         vtf_group = [p for p in group if p.endswith('.vtf')]
         if len(vtf_group) < 2:
@@ -309,9 +264,6 @@ def dedup_textures(files: dict) -> dict:
 
 
 def audit_textures(files: dict, max_res: int | None = 1024) -> list[dict]:
-    """Repère les textures problématiques (surdimensionnées, non compressées…).
-
-    Chaque entrée : {path, issue, detail}. `issue` est une clé de traduction."""
     issues: list[dict] = []
     for k, v in files.items():
         if k == '__meta__' or not k.endswith('.vtf'):

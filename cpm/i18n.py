@@ -1,11 +1,6 @@
-"""Internationalisation (FR/EN)."""
-
-
 STRINGS: dict[str, dict[str, str]] = {
-    # CLI
     'cli_header': {'fr': "Compressez PM GMod v{version} – mode CLI\n", 'en': "Compressez PM GMod v{version} – CLI mode\n"},
 
-    # Pipeline général
     'loading_files':   {'fr': "Chargement des fichiers…", 'en': "Loading files…"},
     'err_no_files':    {'fr': "✗ ERREUR : Aucun fichier trouvé dans la source.", 'en': "✗ ERROR: No files found in source."},
     'files_loaded':    {'fr': "▶ {n} fichier(s) chargé(s)", 'en': "▶ {n} file(s) loaded"},
@@ -44,11 +39,9 @@ STRINGS: dict[str, dict[str, str]] = {
     'error_generic':   {'fr': "\n✗ ERREUR : {e}", 'en': "\n✗ ERROR: {e}"},
     'status_error':    {'fr': "Erreur !", 'en': "Error!"},
 
-    # C-Hands / fichiers inutiles
     'removed_chand':       {'fr': "  Supprimé C-Hand : {path}", 'en': "  Removed C-Hand: {path}"},
     'removed_unused_file': {'fr': "  Supprimé inutile : {path}", 'en': "  Removed unused file: {path}"},
 
-    # Textures
     'no_textures':     {'fr': "  Aucune texture trouvée.", 'en': "  No textures found."},
     'textures_found':  {'fr': "  {n} texture(s) trouvée(s)…", 'en': "  {n} texture(s) found…"},
     'no_res_limit':    {'fr': "  Résolution max : aucune limite (les .vtf seront copiés tels quels)", 'en': "  Max resolution: no limit (.vtf files copied as-is)"},
@@ -60,14 +53,12 @@ STRINGS: dict[str, dict[str, str]] = {
     'textures_parallel': {'fr': "  Traitement sur {n} threads…", 'en': "  Processing on {n} threads…"},
     'no_limit':        {'fr': "Aucune limite", 'en': "No limit"},
 
-    # Sons
     'no_sounds':    {'fr': "  Aucun son trouvé.", 'en': "  No sounds found."},
     'sounds_found': {'fr': "  {n} son(s) trouvé(s)…", 'en': "  {n} sound(s) found…"},
     'sound_saving': {'fr': "  {path} : -{size}", 'en': "  {path}: -{size}"},
     'sound_error':  {'fr': "  Erreur son {path}: {e}", 'en': "  Sound error {path}: {e}"},
     'sound_skipped_format': {'fr': "  ⚠ {path} : format non joué par GMod, laissé tel quel", 'en': "  ⚠ {path}: format not playable by GMod, left as-is"},
 
-    # Lua
     'lua_no_models_player': {'fr': "  Lua : aucun .mdl dans models/player/, utilisation des modèles trouvés ailleurs dans models/", 'en': "  Lua: no .mdl in models/player/, using models found elsewhere in models/"},
     'lua_no_models':        {'fr': "  Lua : aucun .mdl trouvé dans models/ – ignoré", 'en': "  Lua: no .mdl found in models/ – skipped"},
     'lua_model_detected':   {'fr': "  Lua : modèle détecté → {path}", 'en': "  Lua: model detected → {path}"},
@@ -76,37 +67,30 @@ STRINGS: dict[str, dict[str, str]] = {
     'lua_created':          {'fr': "  Lua créé : {path}", 'en': "  Lua created: {path}"},
     'lua_hands_registered': {'fr': "  Lua : {n} c_hands enregistré(s) via AddValidHands", 'en': "  Lua: {n} c_hands registered via AddValidHands"},
 
-    # addon.json
     'addon_json_created': {'fr': "  ✓ addon.json créé (requis par gmad) : {title}", 'en': "  ✓ addon.json created (required by gmad): {title}"},
 
-    # Écriture
     'write_folder': {'fr': "  Dossier : {path}/", 'en': "  Folder: {path}/"},
     'write_gma':    {'fr': "  GMA : {path}", 'en': "  GMA: {path}"},
     'write_zip':    {'fr': "  ZIP : {path}", 'en': "  ZIP: {path}"},
 
-    # Mode aperçu (dry-run)
     'dry_run_active':             {'fr': "  🔍 Mode aperçu activé : aucune modification ne sera écrite sur le disque", 'en': "  🔍 Dry-run mode enabled: nothing will be written to disk"},
     'dry_run_would_write_folder': {'fr': "  [APERÇU] Aurait écrit le dossier : {path}/ ({n} fichier(s))", 'en': "  [DRY-RUN] Would write folder: {path}/ ({n} file(s))"},
     'dry_run_would_write_gma':    {'fr': "  [APERÇU] Aurait écrit le GMA : {path}", 'en': "  [DRY-RUN] Would write GMA: {path}"},
     'dry_run_would_write_zip':    {'fr': "  [APERÇU] Aurait écrit le ZIP : {path}", 'en': "  [DRY-RUN] Would write ZIP: {path}"},
 
-    # Sauvegarde de l'original
     'backup_created': {'fr': "  ✓ Sauvegarde de l'original créée : {path}", 'en': "  ✓ Backup of original created: {path}"},
     'backup_failed':  {'fr': "  ⚠ Sauvegarde impossible : {e}", 'en': "  ⚠ Backup failed: {e}"},
 
-    # Mode taille cible
     'step_target_size':   {'fr': "  ▶ Mode taille cible — objectif : {size}", 'en': "  ▶ Target size mode — goal: {size}"},
     'target_attempt':     {'fr': "    Tentative {n} : résolution={res}, qualité={q} → {size}", 'en': "    Attempt {n}: resolution={res}, quality={q} → {size}"},
     'target_reached':     {'fr': "  ✓ Taille cible atteinte : {size} ≤ {target}", 'en': "  ✓ Target size reached: {size} ≤ {target}"},
     'target_not_reached': {'fr': "  ⚠ Taille cible non atteinte ({size} > {target}), réglages les plus agressifs appliqués", 'en': "  ⚠ Target size not reached ({size} > {target}), most aggressive settings applied"},
 
-    # Détection de matériaux/textures manquants
     'no_vmt':                  {'fr': "  Aucun fichier .vmt trouvé.", 'en': "  No .vmt file found."},
     'missing_texture':         {'fr': "  ⚠ Texture manquante : {texture} (référencée dans {vmt})", 'en': "  ⚠ Missing texture: {texture} (referenced in {vmt})"},
     'missing_textures_none':   {'fr': "  ✓ Aucune texture manquante détectée ({n} .vmt vérifié(s))", 'en': "  ✓ No missing textures detected ({n} .vmt checked)"},
     'missing_textures_found':  {'fr': "  ⚠ {n} texture(s) manquante(s) détectée(s)", 'en': "  ⚠ {n} missing texture(s) detected"},
 
-    # Classification et rôles des textures
     'classify_header':     {'fr': "  ── Rôle des textures ──", 'en': "  ── Texture roles ──"},
     'classify_line':       {'fr': "  {role} : {n} texture(s)", 'en': "  {role}: {n} texture(s)"},
     'classify_item':       {'fr': "      • {path}", 'en': "      • {path}"},
@@ -125,7 +109,6 @@ STRINGS: dict[str, dict[str, str]] = {
     'role_eye_effect':     {'fr': "Effets (yeux brillants, œil…)", 'en': "Eye effects (glow, eyeball…)"},
     'role_other':          {'fr': "Autre / Non classé", 'en': "Other / Unclassified"},
 
-    # Textures inutilisées
     'unused_tex_header':   {'fr': "  ── Textures inutilisées ──", 'en': "  ── Unused textures ──"},
     'unused_tex_item':     {'fr': "  ⚠ Inutilisée (aucun .vmt) : {path} ({size})", 'en': "  ⚠ Unused (no .vmt): {path} ({size})"},
     'unused_tex_removed':  {'fr': "  🗑 Supprimée : {path} ({size})", 'en': "  🗑 Removed: {path} ({size})"},
@@ -134,26 +117,22 @@ STRINGS: dict[str, dict[str, str]] = {
     'unused_tex_deleted':  {'fr': "  🗑 {n} texture(s) inutilisée(s) supprimée(s) — {size} libéré(s)", 'en': "  🗑 {n} unused texture(s) removed — {size} freed"},
     'unused_tex_no_vmt':   {'fr': "  Aucun .vmt : classement des textures inutilisées ignoré.", 'en': "  No .vmt: unused-texture check skipped."},
 
-    # Matériaux (.vmt) orphelins — non référencés par un .mdl
     'orphan_vmt_header':   {'fr': "  ── Matériaux orphelins ──", 'en': "  ── Orphan materials ──"},
     'orphan_vmt_item':     {'fr': "  ⚠ Orphelin (aucun .mdl) : {path} ({size})", 'en': "  ⚠ Orphan (no .mdl): {path} ({size})"},
     'orphan_vmt_removed':  {'fr': "  🗑 Supprimé : {path} ({size})", 'en': "  🗑 Removed: {path} ({size})"},
     'orphan_vmt_found':    {'fr': "  ⚠ {n} matériau(x) orphelin(s) — {size}", 'en': "  ⚠ {n} orphan material(s) — {size}"},
     'orphan_vmt_deleted':  {'fr': "  🗑 {n} matériau(x) orphelin(s) supprimé(s) — {size} libéré(s)", 'en': "  🗑 {n} orphan material(s) removed — {size} freed"},
 
-    # Doublons de textures
     'dup_header':          {'fr': "  ── Doublons de textures ──", 'en': "  ── Duplicate textures ──"},
     'dup_group':           {'fr': "  ⧉ {n} copies identiques ({size} chacune) :", 'en': "  ⧉ {n} identical copies ({size} each):"},
     'dup_item':            {'fr': "      • {path}", 'en': "      • {path}"},
     'dup_none':            {'fr': "  ✓ Aucun doublon exact détecté.", 'en': "  ✓ No exact duplicate detected."},
     'dup_summary':         {'fr': "  ⧉ {groups} groupe(s) de doublons — {size} récupérable(s) par déduplication", 'en': "  ⧉ {groups} duplicate group(s) — {size} recoverable via dedup"},
 
-    # Déduplication des textures
     'dedup_merged':        {'fr': "  ⧉ Fusionné : {path} → {kept}", 'en': "  ⧉ Merged: {path} → {kept}"},
     'dedup_done':          {'fr': "  ✓ {n} doublon(s) fusionné(s), {vmt} .vmt réécrit(s) — {size} libéré(s)", 'en': "  ✓ {n} duplicate(s) merged, {vmt} .vmt rewritten — {size} freed"},
     'dedup_nothing':       {'fr': "  Aucun doublon .vtf fusionnable.", 'en': "  No mergeable .vtf duplicate."},
 
-    # Whitelist GMA
     'whitelist_header':         {'fr': "  ── Compatibilité GMA ──", 'en': "  ── GMA compatibility ──"},
     'whitelist_bad':            {'fr': "  ⚠ Refusé par GMod : {path}", 'en': "  ⚠ Rejected by GMod: {path}"},
     'whitelist_stripped':       {'fr': "  🗑 Retiré (hors whitelist GMA) : {path}", 'en': "  🗑 Stripped (not GMA-whitelisted): {path}"},
@@ -161,7 +140,6 @@ STRINGS: dict[str, dict[str, str]] = {
     'whitelist_found':          {'fr': "  ⚠ {n} fichier(s) seraient refusés au montage du .gma (activez le retrait automatique)", 'en': "  ⚠ {n} file(s) would be rejected when mounting the .gma (enable auto-strip)"},
     'whitelist_stripped_total': {'fr': "  🗑 {n} fichier(s) hors whitelist retiré(s)", 'en': "  🗑 {n} non-whitelisted file(s) stripped"},
 
-    # Audit des textures
     'audit_header':        {'fr': "  ── Audit des textures ──", 'en': "  ── Texture audit ──"},
     'audit_oversized':     {'fr': "  ⚠ Surdimensionnée : {path} ({detail})", 'en': "  ⚠ Oversized: {path} ({detail})"},
     'audit_uncompressed':  {'fr': "  ⚠ Non compressée : {path} (format {detail} → DXT recommandé)", 'en': "  ⚠ Uncompressed: {path} (format {detail} → DXT recommended)"},
@@ -169,7 +147,6 @@ STRINGS: dict[str, dict[str, str]] = {
     'audit_none':          {'fr': "  ✓ Aucun problème de texture détecté.", 'en': "  ✓ No texture issue detected."},
     'audit_summary':       {'fr': "  ⚠ {n} avertissement(s) d'audit", 'en': "  ⚠ {n} audit warning(s)"},
 
-    # Rapport HTML
     'report_written':      {'fr': "▶ Rapport HTML généré : {path}", 'en': "▶ HTML report generated: {path}"},
     'report_title':        {'fr': "Rapport d'analyse — {name}", 'en': "Analysis report — {name}"},
     'report_subtitle':     {'fr': "Compressez PM GMod — analyse de l'addon", 'en': "Compressez PM GMod — addon analysis"},
@@ -193,10 +170,9 @@ STRINGS: dict[str, dict[str, str]] = {
     'report_open':         {'fr': "📄 Ouvrir le rapport", 'en': "📄 Open report"},
     'chk_report':          {'fr': "Générer un rapport HTML", 'en': "Generate HTML report"},
     'desc_report':         {'fr': "  Récapitulatif visuel (rôles, orphelins, audit)", 'en': "  Visual summary (roles, orphans, audit)"},
-    'chk_convert':         {'fr': "Recompresser les textures non compressées (DXT)", 'en': "Recompress uncompressed textures (DXT)"},
+    'chk_convert':         {'fr': "Recompresser les textures en DXT", 'en': "Recompress textures to DXT"},
     'desc_convert':        {'fr': "  Convertit les .vtf RGBA/BGR volumineux en DXT", 'en': "  Converts bulky RGBA/BGR .vtf files to DXT"},
 
-    # Mode batch
     'batch_none':           {'fr': "✗ ERREUR : Aucun addon trouvé pour le mode batch (sous-dossiers ou .gma attendus dans la source).", 'en': "✗ ERROR: No addon found for batch mode (subfolders or .gma files expected in source)."},
     'batch_found':          {'fr': "▶ Mode batch : {n} addon(s) détecté(s) dans {path}", 'en': "▶ Batch mode: {n} addon(s) detected in {path}"},
     'batch_processing':     {'fr': "▶ ─── Addon {i}/{n} : {name} ───", 'en': "▶ ─── Addon {i}/{n}: {name} ───"},
@@ -204,18 +180,38 @@ STRINGS: dict[str, dict[str, str]] = {
     'batch_summary_line':   {'fr': "  {name} : {size}  ({pct}%)", 'en': "  {name}: {size}  ({pct}%)"},
     'batch_done':           {'fr': "✓ Traitement par lot terminé : {n} addon(s)", 'en': "✓ Batch processing completed: {n} addon(s)"},
 
-    # ─── Interface graphique ────────────────────────────────────────────────
     'app_tagline':         {'fr': "Compresseur d'addons Playermodel pour Garry's Mod", 'en': "Playermodel addon compressor for Garry's Mod"},
-    'io_section':          {'fr': " 📁 Entrée / Sortie ", 'en': " 📁 Input / Output "},
-    'label_source':        {'fr': "Source :", 'en': "Source:"},
-    'label_output':        {'fr': "Sortie :", 'en': "Output:"},
+
+    'nav_source':   {'fr': "Source",  'en': "Source"},
+    'nav_options':  {'fr': "Options", 'en': "Options"},
+    'nav_advanced': {'fr': "Avancé",  'en': "Advanced"},
+    'nav_log':      {'fr': "Journal", 'en': "Log"},
+
+    'page_source_sub':   {'fr': "Choisissez l'addon à compresser et sa destination", 'en': "Pick the addon to compress and where it goes"},
+    'page_options_sub':  {'fr': "Réglages principaux : nettoyage, textures, script Lua", 'en': "Main settings: cleanup, textures, Lua script"},
+    'page_advanced_sub': {'fr': "Contrôle fin : sons, archive, sécurité, taille cible", 'en': "Fine control: sounds, archive, safety, target size"},
+    'page_log_sub':      {'fr': "Déroulé complet de la compression en cours", 'en': "Full trace of the running compression"},
+
+    'card_source':   {'fr': "Addon source",     'en': "Source addon"},
+    'card_output':   {'fr': "Destination",      'en': "Destination"},
+    'card_profile':  {'fr': "Profil rapide",    'en': "Quick profile"},
+    'card_cleanup':  {'fr': "Nettoyage",        'en': "Cleanup"},
+    'card_textures': {'fr': "Textures",         'en': "Textures"},
+    'card_lua':      {'fr': "Script Lua",       'en': "Lua script"},
+    'card_sounds':   {'fr': "Sons & archive",   'en': "Sounds & archive"},
+    'card_safety':   {'fr': "Sécurité & rapport", 'en': "Safety & report"},
+    'card_limits':   {'fr': "Taille & lot",     'en': "Size & batch"},
+    'card_gma':      {'fr': "Compatibilité GMA", 'en': "GMA compatibility"},
+
+    'sidebar_libs': {'fr': "Bibliothèques", 'en': "Libraries"},
+    'sidebar_oss':  {'fr': "Logiciel libre · MIT", 'en': "Free software · MIT"},
+
     'btn_browse':          {'fr': "📂 Parcourir", 'en': "📂 Browse"},
     'label_source_type':   {'fr': "Type source :", 'en': "Source type:"},
     'radio_folder':        {'fr': "Dossier", 'en': "Folder"},
     'radio_gma_file':      {'fr': "Fichier .gma", 'en': ".gma file"},
     'label_output_format': {'fr': "Format sortie :", 'en': "Output format:"},
 
-    # Zone de dépôt
     'drop_title':       {'fr': "Déposez un dossier d'addon ou un fichier .gma ici", 'en': "Drop an addon folder or a .gma file here"},
     'drop_title_nodnd': {'fr': "Sélectionnez un dossier d'addon ou un fichier .gma", 'en': "Select an addon folder or a .gma file"},
     'drop_or':          {'fr': "…ou cliquez pour parcourir", 'en': "…or click to browse"},
@@ -235,18 +231,14 @@ STRINGS: dict[str, dict[str, str]] = {
     'stats_source':      {'fr': "Source : {count} fichier(s) — {size}", 'en': "Source: {count} file(s) — {size}"},
     'stats_source_file': {'fr': "Fichier source : {size}", 'en': "Source file: {size}"},
     'stats_analyzing':   {'fr': "Analyse de la source…", 'en': "Analyzing source…"},
-    'stats_done':        {'fr': "✓ Terminé : {before} → {after}  (-{pct}%)", 'en': "✓ Done: {before} → {after}  (-{pct}%)"},
+    'stats_done':        {'fr': "✓ Terminé : {before} → {after}  ({delta})", 'en': "✓ Done: {before} → {after}  ({delta})"},
 
-    'label_profile':    {'fr': "Profil rapide :", 'en': "Quick profile:"},
     'profile_hint':     {'fr': "  Ajuste automatiquement les réglages ci-dessous", 'en': "  Automatically adjusts the settings below"},
     'profile_custom':   {'fr': "Personnalisé", 'en': "Custom"},
     'profile_balanced': {'fr': "Équilibré (recommandé)", 'en': "Balanced (recommended)"},
     'profile_quality':  {'fr': "Qualité maximale", 'en': "Maximum quality"},
     'profile_minimal':  {'fr': "Taille minimale", 'en': "Minimum size"},
     'profile_share':    {'fr': "Partage rapide (Discord…)", 'en': "Quick share (Discord…)"},
-
-    'tab_general':  {'fr': " ⚙ Général ", 'en': " ⚙ General "},
-    'tab_advanced': {'fr': " 🛠 Avancé ", 'en': " 🛠 Advanced "},
 
     'chk_chands':  {'fr': "Supprimer les C-Hands", 'en': "Remove C-Hands"},
     'desc_chands': {'fr': "  Retire les bras à la 1ʳᵉ personne (c_arms, c_*)", 'en': "  Removes first-person arms (c_arms, c_*)"},
@@ -277,7 +269,6 @@ STRINGS: dict[str, dict[str, str]] = {
     'lib_vtflib':         {'fr': "vtflib (.vtf natif)", 'en': "vtflib (native .vtf)"},
     'lib_ffmpeg':         {'fr': "ffmpeg (sons)", 'en': "ffmpeg (sounds)"},
 
-    # Nouvelles options (onglet Avancé)
     'chk_check_materials': {'fr': "Vérifier les matériaux/textures manquants", 'en': "Check for missing materials/textures"},
     'chk_dry_run':         {'fr': "Mode aperçu (dry-run)", 'en': "Dry-run (preview) mode"},
     'desc_dry_run':        {'fr': "  Affiche les changements sans rien écrire", 'en': "  Shows changes without writing anything"},
@@ -289,10 +280,8 @@ STRINGS: dict[str, dict[str, str]] = {
     'chk_batch':           {'fr': "Mode batch (plusieurs addons)", 'en': "Batch mode (multiple addons)"},
     'desc_batch':          {'fr': "  Source = dossier contenant plusieurs\n  sous-dossiers/.gma à traiter", 'en': "  Source = folder containing multiple\n  subfolders/.gma to process"},
 
-    'progress_section': {'fr': " 📊 Progression ", 'en': " 📊 Progress "},
     'status_ready':     {'fr': "Prêt", 'en': "Ready"},
 
-    # Pastilles d'étapes (indicateur de progression)
     'step_chip_1': {'fr': "C-Hands",   'en': "C-Hands"},
     'step_chip_2': {'fr': "Inutiles",  'en': "Junk"},
     'step_chip_3': {'fr': "Matériaux", 'en': "Materials"},
@@ -301,9 +290,6 @@ STRINGS: dict[str, dict[str, str]] = {
     'step_chip_6': {'fr': "Lua",       'en': "Lua"},
     'step_chip_7': {'fr': "Écriture",  'en': "Write"},
 
-    'log_section': {'fr': " 📜 Journal ", 'en': " 📜 Log "},
-
-    # Barre d'outils du journal
     'log_filter_all':  {'fr': "Tout", 'en': "All"},
     'log_filter_warn': {'fr': "⚠ Avertissements", 'en': "⚠ Warnings"},
     'log_filter_err':  {'fr': "✗ Erreurs", 'en': "✗ Errors"},
@@ -323,13 +309,11 @@ STRINGS: dict[str, dict[str, str]] = {
     'shortcuts_hint':  {'fr': "Raccourcis :  Ctrl+O source  •  Ctrl+Entrée compresser  •  Échap annuler",
                         'en': "Shortcuts:  Ctrl+O source  •  Ctrl+Enter compress  •  Esc cancel"},
 
-    # Nouvelles options
     'chk_dedup':            {'fr': "Fusionner les textures identiques", 'en': "Merge identical textures"},
     'desc_dedup':           {'fr': "  Réécrit les .vmt vers une copie unique (sans perte)", 'en': "  Rewrites .vmt files to a single copy (lossless)"},
     'chk_strip_whitelist':  {'fr': "Retirer les fichiers refusés par GMod (.gma)", 'en': "Strip files GMod rejects (.gma)"},
     'desc_strip_whitelist': {'fr': "  Whitelist GMA : évite un addon qui ne monte pas", 'en': "  GMA whitelist: avoids an addon that fails to mount"},
 
-    # Info-bulles
     'tip_profile':           {'fr': "Applique un jeu de réglages prédéfini. « Personnalisé » ne touche à rien.", 'en': "Applies a predefined settings set. “Custom” changes nothing."},
     'tip_recent':            {'fr': "Sources récentes", 'en': "Recent sources"},
     'tip_chands':            {'fr': "Supprime les modèles de bras à la 1ʳᵉ personne (c_arms). Inutiles si l'addon n'est qu'un playermodel.", 'en': "Removes first-person arm models (c_arms). Useless if the addon is only a playermodel."},
@@ -364,20 +348,17 @@ STRINGS: dict[str, dict[str, str]] = {
     'msg_invalid_target_size_body':  {'fr': "Veuillez entrer un nombre valide pour la taille cible (Mo).", 'en': "Please enter a valid number for the target size (MB)."},
 
     'summary_title':   {'fr': "Compression terminée 🎉", 'en': "Compression complete 🎉"},
-    'summary_body':    {'fr': "Avant :   {before}\nAprès :   {after}\nGagné :   {saved}  (-{pct}%)",
-                        'en': "Before:  {before}\nAfter:   {after}\nSaved:   {saved}  (-{pct}%)"},
+    'summary_body':    {'fr': "Avant :   {before}\nAprès :   {after}\nGagné :   {saved}  ({delta})",
+                        'en': "Before:  {before}\nAfter:   {after}\nSaved:   {saved}  ({delta})"},
     'summary_elapsed': {'fr': "Durée :   {dur}", 'en': "Elapsed:  {dur}"},
     'summary_open_folder': {'fr': "📂 Ouvrir le dossier", 'en': "📂 Open folder"},
     'summary_close':   {'fr': "Fermer", 'en': "Close"},
     'summary_dry_run': {'fr': "Mode aperçu : aucun fichier n'a réellement été écrit.", 'en': "Dry-run mode: no file was actually written."},
 
-    # À propos
     'btn_about':       {'fr': "ℹ À propos", 'en': "ℹ About"},
     'about_title':     {'fr': "À propos", 'en': "About"},
-    'about_body':      {'fr': "Compressez PM GMod  v{version}\n\nCompresseur d'addons Playermodel pour Garry's Mod.\nRéduit la taille des textures, sons et fichiers inutiles\ntout en préservant le rendu en jeu.\n\nLicence : MIT\n\nBibliothèques détectées :\n{libs}",
-                        'en': "Compressez PM GMod  v{version}\n\nPlayermodel addon compressor for Garry's Mod.\nReduces texture, sound and junk-file size while\npreserving the in-game look.\n\nLicense: MIT\n\nDetected libraries:\n{libs}"},
-    'about_lib_yes':   {'fr': "  ✓ {lib}", 'en': "  ✓ {lib}"},
-    'about_lib_no':    {'fr': "  ✗ {lib} (absent)", 'en': "  ✗ {lib} (missing)"},
+    'about_intro':     {'fr': "Compresseur d'addons Playermodel pour Garry's Mod.\nRéduit la taille des textures, des sons et des fichiers\ninutiles tout en préservant le rendu en jeu.\n\nCode source et contributions :",
+                        'en': "Playermodel addon compressor for Garry's Mod.\nShrinks textures, sounds and junk files while\npreserving the in-game look.\n\nSource code and contributions:"},
 
     'log_app_version':    {'fr': "Compressez PM GMod  v{version}", 'en': "Compressez PM GMod  v{version}"},
     'log_install_pillow': {'fr': "→ pip install Pillow   (optimisation .png/.jpg/.tga)", 'en': "→ pip install Pillow   (.png/.jpg/.tga optimization)"},
@@ -385,7 +366,6 @@ STRINGS: dict[str, dict[str, str]] = {
 
 
 def t(key: str, lang: str = 'fr', **kwargs) -> str:
-    """Traduit une clé STRINGS dans la langue demandée (repli sur le français)."""
     entry = STRINGS.get(key, {})
     text = entry.get(lang, entry.get('fr', key))
     if kwargs:

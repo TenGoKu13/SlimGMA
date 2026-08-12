@@ -1,4 +1,3 @@
-"""Point d'entrée ligne de commande."""
 import sys
 
 from .constants import VERSION

@@ -19,6 +19,9 @@ jobs:
       - name: Installer les dépendances de test
         run: python -m pip install -r requirements-dev.txt
 
+      - name: Vérifier l'absence de commentaires
+        run: python tools/check_no_comments.py .
+
       - name: Lancer les tests
         run: python -m pytest -q
 

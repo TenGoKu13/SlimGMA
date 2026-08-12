@@ -1,49 +1,38 @@
-"""Tests du moteur d'analyse de Compressez PM GMod.
-
-Ces tests portent sur les fonctions pures (parsing .mdl/.vmt/.vtf, graphe de
-dépendances, doublons, audit) et ne nécessitent ni tkinter ni GUI.
-
-Lancement :  pytest -q
-"""
 import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import compressez_pm as m  # noqa: E402
+import compressez_pm as m
 
-
-# ─── Fabriques de fichiers binaires factices ────────────────────────────────
 
 def make_mdl(material_name: str = "head", cdmaterials: str = "models/mymodel/") -> bytes:
-    """Construit un .mdl minimal mais valide pour parse_mdl_materials."""
     buf = bytearray(512)
     buf[0:4] = b'IDST'
     textureindex = 224
-    name_off_rel = 64                      # nom placé juste après le struct texture
-    struct.pack_into('<i', buf, 204, 1)              # numtextures
-    struct.pack_into('<i', buf, 208, textureindex)   # textureindex
-    struct.pack_into('<i', buf, 212, 1)              # numcdtextures
-    struct.pack_into('<i', buf, 216, 300)            # cdtextureindex
-    struct.pack_into('<i', buf, textureindex, name_off_rel)  # sznameindex
+    name_off_rel = 64
+    struct.pack_into('<i', buf, 204, 1)
+    struct.pack_into('<i', buf, 208, textureindex)
+    struct.pack_into('<i', buf, 212, 1)
+    struct.pack_into('<i', buf, 216, 300)
+    struct.pack_into('<i', buf, textureindex, name_off_rel)
     name_abs = textureindex + name_off_rel
     buf[name_abs:name_abs + len(material_name)] = material_name.encode()
-    struct.pack_into('<i', buf, 300, 320)            # pointeur -> chaîne cdmat
+    struct.pack_into('<i', buf, 300, 320)
     buf[320:320 + len(cdmaterials)] = cdmaterials.encode()
     return bytes(buf)
 
 
 def make_vtf(width: int = 2048, height: int = 2048, fmt: int = 13,
              mipmaps: int = 1) -> bytes:
-    """Construit un en-tête .vtf minimal lisible par read_vtf_info."""
     buf = bytearray(80)
     buf[0:4] = b'VTF\x00'
-    struct.pack_into('<II', buf, 4, 7, 4)            # version 7.4
+    struct.pack_into('<II', buf, 4, 7, 4)
     struct.pack_into('<HH', buf, 16, width, height)
-    struct.pack_into('<I', buf, 20, 0)               # flags
-    struct.pack_into('<H', buf, 24, 1)               # frames
-    struct.pack_into('<i', buf, 52, fmt)             # high-res format
+    struct.pack_into('<I', buf, 20, 0)
+    struct.pack_into('<H', buf, 24, 1)
+    struct.pack_into('<i', buf, 52, fmt)
     buf[56] = mipmaps
     return bytes(buf)
 
@@ -51,8 +40,6 @@ def make_vtf(width: int = 2048, height: int = 2048, fmt: int = 13,
 def vmt(basetexture: str) -> bytes:
     return (f'"VertexLitGeneric"\n{{\n\t"$basetexture" "{basetexture}"\n}}\n').encode()
 
-
-# ─── parse_vmt_refs ─────────────────────────────────────────────────────────
 
 def test_parse_vmt_refs_resolves_paths():
     refs = m.parse_vmt_refs('"$basetexture" "models/x/head"')
@@ -68,8 +55,6 @@ def test_resolve_material_ref_adds_prefix_and_suffix():
     assert m.resolve_material_ref('materials/models/x/body.vtf') == 'materials/models/x/body.vtf'
 
 
-# ─── parse_mdl_materials ────────────────────────────────────────────────────
-
 def test_parse_mdl_materials_reads_name_and_dir():
     names, dirs = m.parse_mdl_materials(make_mdl("head", "models/mymodel/"))
     assert names == ["head"]
@@ -80,8 +65,6 @@ def test_parse_mdl_materials_rejects_non_mdl():
     assert m.parse_mdl_materials(b'NOPE' + b'\x00' * 300) == ([], [])
 
 
-# ─── read_vtf_info ──────────────────────────────────────────────────────────
-
 def test_read_vtf_info_dxt1():
     info = m.read_vtf_info(make_vtf(1024, 1024, fmt=13))
     assert info['width'] == 1024 and info['height'] == 1024
@@ -91,8 +74,6 @@ def test_read_vtf_info_dxt1():
 def test_read_vtf_info_rejects_garbage():
     assert m.read_vtf_info(b'not a vtf') is None
 
-
-# ─── build_dependency_graph ─────────────────────────────────────────────────
 
 def test_dependency_graph_flags_orphan_vtf():
     files = {
@@ -124,10 +105,8 @@ def test_dependency_graph_no_mdl_means_no_vmt_orphans():
         'materials/models/x/a.vtf': make_vtf(),
     }
     g = m.build_dependency_graph(files)
-    assert g['orphan_vmt'] == []          # pas de .mdl -> aucun faux positif
+    assert g['orphan_vmt'] == []
 
-
-# ─── find_duplicate_textures ────────────────────────────────────────────────
 
 def test_find_duplicate_textures():
     same = make_vtf(512, 512)
@@ -140,11 +119,9 @@ def test_find_duplicate_textures():
     assert groups == [['materials/a.vtf', 'materials/b.vtf']]
 
 
-# ─── audit_textures ─────────────────────────────────────────────────────────
-
 def test_audit_flags_oversized_and_uncompressed():
     files = {
-        'materials/big.vtf': make_vtf(2048, 2048, fmt=0),   # RGBA8888, 2048px
+        'materials/big.vtf': make_vtf(2048, 2048, fmt=0),
     }
     issues = m.audit_textures(files, max_res=1024)
     kinds = {i['issue'] for i in issues}
@@ -157,8 +134,6 @@ def test_audit_flags_npot():
     issues = m.audit_textures(files, max_res=None)
     assert any(i['issue'] == 'audit_npot' for i in issues)
 
-
-# ─── classification (regression) ────────────────────────────────────────────
 
 def test_build_html_report_is_self_contained():
     report = {
@@ -175,7 +150,7 @@ def test_build_html_report_is_self_contained():
     out = m.build_html_report(report)
     assert '<!doctype html>' in out.lower()
     assert 'materials/head.vtf' in out
-    assert 'http://' not in out and 'https://' not in out   # autonome, aucune ressource externe
+    assert 'http://' not in out and 'https://' not in out
 
 
 def test_build_html_report_escapes_paths():
@@ -199,8 +174,6 @@ def test_classify_roles():
     assert C._classify_texture_role('materials/x/body_normal.vtf') == 'role_normalmap'
     assert C._classify_texture_role('materials/x/eye_glow.vtf') == 'role_eye_effect'
 
-
-# ─── Whitelist GMA ──────────────────────────────────────────────────────────
 
 def test_whitelist_accepts_standard_addon_files():
     for path in (
@@ -236,8 +209,6 @@ def test_check_gma_whitelist_lists_offenders():
     assert m.check_gma_whitelist(files) == ['bad.blend']
 
 
-# ─── Déduplication des textures ─────────────────────────────────────────────
-
 def test_dedup_prefers_referenced_copy_and_rewrites_vmt():
     same = make_vtf(512, 512)
     files = {
@@ -248,11 +219,9 @@ def test_dedup_prefers_referenced_copy_and_rewrites_vmt():
     }
     result = m.dedup_textures(files)
 
-    # La copie référencée en premier (ordre alphabétique) est conservée…
     assert result['removed'] == ['materials/models/x/zz_dup.vtf']
     assert 'materials/models/x/zz_dup.vtf' not in files
     assert 'materials/models/x/head.vtf' in files
-    # …et le .vmt qui pointait vers le doublon est réécrit vers elle.
     assert result['rewritten_vmt'] == ['materials/models/x/zz_dup.vmt']
     rewritten = files['materials/models/x/zz_dup.vmt'].decode()
     assert 'models/x/head' in rewritten
@@ -265,7 +234,7 @@ def test_dedup_orphan_duplicate_merged_without_rewrite():
     files = {
         'materials/models/x/head.vmt': vmt('models/x/head'),
         'materials/models/x/head.vtf': same,
-        'materials/models/x/copy.vtf': same,    # orphelin, non référencé
+        'materials/models/x/copy.vtf': same,
     }
     result = m.dedup_textures(files)
     assert result['removed'] == ['materials/models/x/copy.vtf']
@@ -283,8 +252,6 @@ def test_dedup_no_duplicates_is_noop():
     assert result['removed'] == [] and result['saved'] == 0
     assert files == before
 
-
-# ─── Génération Lua ─────────────────────────────────────────────────────────
 
 def _dummy_compressor(opts=None) -> 'm.Compressor':
     base = {'lang': 'fr', 'lua_chands': True}
@@ -307,7 +274,6 @@ def test_generate_lua_uses_valid_gmod_api():
     assert 'list.Set("PlayerOptionsModel"' in lua
     assert 'player_manager.AddValidHands' in lua
     assert 'models/weapons/c_arms_bob.mdl' in lua
-    # Régression : cette méthode n'existe pas dans l'API GMod.
     assert 'GetBodygroupsString' not in lua
 
 
@@ -319,8 +285,6 @@ def test_generate_lua_without_chands():
     assert 'AddValidHands' not in lua
 
 
-# ─── Divers ─────────────────────────────────────────────────────────────────
-
 def test_fmt_size():
     fmt = m.Compressor._fmt_size
     assert fmt(0) == '0 o'
@@ -331,5 +295,33 @@ def test_fmt_size():
 
 def test_sound_encoders_keep_extension():
     encoders = m.Compressor._SOUND_ENCODERS
-    assert set(encoders) == {'.mp3', '.ogg', '.wav'}   # jamais de renommage
+    assert set(encoders) == {'.mp3', '.ogg', '.wav'}
 
+
+def test_generated_lua_has_no_comment_header():
+    files = {'models/player/bob.mdl': b''}
+    _dummy_compressor()._generate_lua(files, 'bob')
+    lua = files['lua/autorun/sh_bob_pm.lua'].decode()
+    assert not any(line.lstrip().startswith('--') for line in lua.splitlines())
+
+
+def test_report_reduction_sign():
+    comp = _dummy_compressor()
+    comp.original_size, comp.final_size = 1000, 800
+
+    comp.reduction = 20.0
+    assert comp._build_report_dict({}, 'bob')['summary']['reduction'] == '-20.0%'
+
+    comp.reduction = -2.7
+    assert comp._build_report_dict({}, 'bob')['summary']['reduction'] == '+2.7%'
+
+    comp.reduction = None
+    assert comp._build_report_dict({}, 'bob')['summary']['reduction'] == '—'
+
+
+def test_gui_delta_label():
+    from cpm.gui import App
+    assert App._delta_label(20.0) == '-20.0%'
+    assert App._delta_label(0) == '-0.0%'
+    assert App._delta_label(-2.7) == '+2.7%'
+    assert App._delta_label(None) == '—'

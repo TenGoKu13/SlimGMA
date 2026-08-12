@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.2.0 — 2026-08-12
+
+### Refonte complète de l'affichage
+- **Navigation latérale** : les onglets empilés laissent place à une barre
+  latérale à quatre pages (Source, Options, Avancé, Journal). Chaque page a son
+  titre, son sous-titre et défile indépendamment si la fenêtre est petite.
+- **Barre d'action permanente** : progression, pourcentage, statut,
+  chronomètre, fichier courant et boutons Compresser / Annuler / Ouvrir le
+  dossier / Ouvrir le rapport restent visibles depuis n'importe quelle page.
+- **Bandeau d'étapes** : les 7 étapes du pipeline sont dessinées en pastilles
+  numérotées reliées entre elles, cochées au fur et à mesure.
+- **Mise en page en cartes** : options regroupées en cartes bordées de largeur
+  égale, au lieu d'une colonne unique de cases à cocher.
+- **Palette redessinée** : nouveaux thèmes sombre et clair, contraste renforcé,
+  boutons, champs, curseurs, ascenseurs et info-bulles entièrement stylés.
+- **Zone de dépôt agrandie** avec aperçu du nom de l'addon et de sa
+  composition.
+- **Compteur d'alertes** : le nombre d'avertissements ou d'erreurs s'affiche
+  directement sur l'entrée « Journal » de la barre latérale.
+- **Filtres de journal en segments** cliquables et fenêtre « À propos »
+  redessinée, avec lien vers le dépôt.
+- La page active est mémorisée entre deux lancements.
+
+### Corrections
+- La ligne de détection des bibliothèques (`PIL : ✗`) n'est plus comptée comme
+  une erreur dans le journal ni dans le compteur d'alertes.
+- Le filtre du journal et l'état des étapes survivent au changement de thème ou
+  de langue.
+- L'ascenseur du journal suit désormais le thème au lieu de rester clair.
+
+### Ouverture du code
+- Ajout du fichier **LICENSE** (MIT) — la licence était annoncée dans le README
+  sans jamais être présente dans le dépôt.
+- Ajout de **CONTRIBUTING.md**, des modèles d'issue et de pull request.
+- Ajout de **pyproject.toml** (métadonnées, extras, point d'entrée
+  `compressez-pm`).
+
+### Style du dépôt
+- **Tous les commentaires et docstrings ont été retirés** du code Python
+  (~280 lignes) : seuls les noms et les clés de traduction portent
+  l'explication. Le shebang est conservé.
+- Ajout de `tools/check_no_comments.py`, exécuté par la CI avant les tests pour
+  empêcher toute réintroduction.
+- Le fichier Lua généré ne contient plus d'en-tête de commentaires.
+
 ## 1.1.0 — 2026-07-17
 
 ### Corrections critiques

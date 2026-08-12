@@ -1,9 +1,4 @@
-"""Génération du rapport HTML autonome (fonctions pures)."""
-
-
 def build_html_report(report: dict) -> str:
-    """Construit un rapport HTML autonome (thème clair/sombre) à partir d'un
-    dict `report` déjà traduit. Fonction pure et testable."""
     import html as _html
 
     def esc(s) -> str:
@@ -14,7 +9,6 @@ def build_html_report(report: dict) -> str:
     s = report.get('summary', {})
     parts: list[str] = []
 
-    # Cartes de synthèse
     cards = [
         (report['labels']['original'], s.get('original', '—')),
         (report['labels']['final'],    s.get('final', '—')),
@@ -26,7 +20,6 @@ def build_html_report(report: dict) -> str:
         f'<div class="v">{esc(v)}</div></div>' for k, v in cards)
     parts.append(f'<div class="cards">{cards_html}</div>')
 
-    # Rôles des textures
     roles = report.get('roles', [])
     if roles:
         blocks = []
@@ -38,7 +31,6 @@ def build_html_report(report: dict) -> str:
                 f'<ul class="files">{lis}</ul></details>')
         parts.append(_section(report['labels']['sec_roles'], ''.join(blocks)))
 
-    # Orphelins
     orphans = report.get('orphans', [])
     if orphans:
         badge = report['labels']['removed'] if report.get('removed') else report['labels']['kept']
@@ -47,7 +39,6 @@ def build_html_report(report: dict) -> str:
                 f'{esc(badge)}</p><ul class="files">{lis}</ul>')
         parts.append(_section(report['labels']['sec_orphans'], body))
 
-    # Doublons
     dups = report.get('duplicates', [])
     if dups:
         blocks = []
@@ -57,7 +48,6 @@ def build_html_report(report: dict) -> str:
                           f'<ul class="files">{lis}</ul></details>')
         parts.append(_section(report['labels']['sec_dups'], ''.join(blocks)))
 
-    # Audit
     audit = report.get('audit', [])
     if audit:
         rows = ''.join(
