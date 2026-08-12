@@ -70,8 +70,6 @@ Exemples :
                         help="Ne pas recompresser les .vtf non compressés en DXT")
     parser.add_argument('--no-addon-json', action='store_true',
                         help="Ne pas générer addon.json s'il manque (sortie dossier)")
-    parser.add_argument('--no-report', action='store_true',
-                        help="Ne pas générer le rapport HTML d'analyse")
     parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
                         help="Langue des messages (défaut : fr)")
 
@@ -98,7 +96,6 @@ Exemples :
         'strip_non_whitelisted': args.strip_non_whitelisted,
         'convert_uncompressed': not args.no_convert_uncompressed,
         'gen_addon_json':    not args.no_addon_json,
-        'gen_report':        not args.no_report,
         'target_size_mb':    args.target_size,
         'dry_run':           args.dry_run,
         'backup_original':   args.backup,

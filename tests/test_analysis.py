@@ -135,38 +135,6 @@ def test_audit_flags_npot():
     assert any(i['issue'] == 'audit_npot' for i in issues)
 
 
-def test_build_html_report_is_self_contained():
-    report = {
-        'title': 'Test', 'subtitle': 'sub', 'removed': True,
-        'summary': {'original': '10 Mo', 'final': '4 Mo', 'reduction': '-60%', 'files': '12'},
-        'roles': [('Tête', ['materials/head.vtf'])],
-        'orphans': ['materials/x.vtf'],
-        'duplicates': [['materials/a.vtf', 'materials/b.vtf']],
-        'audit': [{'path': 'materials/big.vtf', 'label': 'Surdimensionnée', 'detail': '2048'}],
-        'labels': {k: k for k in (
-            'original final saved files sec_roles sec_orphans sec_dups sec_audit '
-            'col_texture col_issue col_detail removed kept empty').split()},
-    }
-    out = m.build_html_report(report)
-    assert '<!doctype html>' in out.lower()
-    assert 'materials/head.vtf' in out
-    assert 'http://' not in out and 'https://' not in out
-
-
-def test_build_html_report_escapes_paths():
-    report = {
-        'title': 'T', 'subtitle': '', 'removed': False, 'summary': {},
-        'roles': [('R', ['materials/<script>.vtf'])],
-        'orphans': [], 'duplicates': [], 'audit': [],
-        'labels': {k: k for k in (
-            'original final saved files sec_roles sec_orphans sec_dups sec_audit '
-            'col_texture col_issue col_detail removed kept empty').split()},
-    }
-    out = m.build_html_report(report)
-    assert '<script>' not in out
-    assert '&lt;script&gt;' in out
-
-
 def test_classify_roles():
     C = m.Compressor
     assert C._classify_texture_role('materials/x/head.vtf') == 'role_head'
@@ -305,18 +273,64 @@ def test_generated_lua_has_no_comment_header():
     assert not any(line.lstrip().startswith('--') for line in lua.splitlines())
 
 
-def test_report_reduction_sign():
+def test_reduction_label_sign():
     comp = _dummy_compressor()
-    comp.original_size, comp.final_size = 1000, 800
-
     comp.reduction = 20.0
-    assert comp._build_report_dict({}, 'bob')['summary']['reduction'] == '-20.0%'
-
+    assert comp.reduction_label() == '-20.0%'
     comp.reduction = -2.7
-    assert comp._build_report_dict({}, 'bob')['summary']['reduction'] == '+2.7%'
-
+    assert comp.reduction_label() == '+2.7%'
     comp.reduction = None
-    assert comp._build_report_dict({}, 'bob')['summary']['reduction'] == '—'
+    assert comp.reduction_label() == '—'
+
+
+def test_build_report_keeps_translation_keys():
+    comp = _dummy_compressor()
+    comp.original_size, comp.final_size, comp.reduction = 2048, 1024, 50.0
+    comp.analysis = {
+        'roles': {'role_head': ['materials/a.vtf']},
+        'orphan_vtf': ['materials/b.vtf'],
+        'orphan_vmt': ['materials/c.vmt'],
+        'duplicates': [['materials/d.vtf', 'materials/e.vtf']],
+        'audit': [{'path': 'materials/f.vtf', 'issue': 'audit_npot',
+                   'detail': '300x300'}],
+        'removed': True,
+    }
+    report = comp.build_report({'a': b'', '__meta__': b''}, 'bob')
+
+    assert report['addon'] == 'bob'
+    assert report['removed'] is True
+    assert report['summary'] == {'original': '2.0 Ko', 'final': '1.0 Ko',
+                                 'reduction': '-50.0%', 'files': '1'}
+    assert report['roles'] == [('role_head', ['materials/a.vtf'])]
+    assert report['orphans'] == ['materials/b.vtf', 'materials/c.vmt']
+    assert report['duplicates'] == [['materials/d.vtf', 'materials/e.vtf']]
+    assert report['audit'] == [{'path': 'materials/f.vtf',
+                                'issue': 'audit_npot', 'detail': '300x300'}]
+
+
+def test_build_report_without_analysis_is_empty_but_valid():
+    comp = _dummy_compressor()
+    report = comp.build_report({}, 'bob')
+    assert report['roles'] == [] and report['orphans'] == []
+    assert report['duplicates'] == [] and report['audit'] == []
+
+
+def test_report_labels_exist_for_every_audit_issue():
+    for issue in ('audit_oversized', 'audit_uncompressed', 'audit_npot'):
+        assert m.STRINGS['report_' + issue]['fr']
+        assert m.STRINGS['report_' + issue]['en']
+
+
+def test_no_html_report_is_written(tmp_path):
+    from cpm.compressor import Compressor
+    src = tmp_path / 'addon'
+    (src / 'models' / 'player').mkdir(parents=True)
+    (src / 'models' / 'player' / 'bob.mdl').write_bytes(b'IDST' + bytes(400))
+    out = tmp_path / 'out'
+    Compressor({'source': str(src), 'output': str(out), 'lang': 'fr'},
+               log_fn=lambda *_: None, progress_fn=lambda *_: None,
+               status_fn=lambda *_: None).run()
+    assert not list(tmp_path.rglob('*.html'))
 
 
 def test_gui_delta_label():

@@ -51,8 +51,9 @@ THEMES = {
 MAX_RECENT_SOURCES = 8
 UI_PUMP_MS = 40
 SIDEBAR_WIDTH = 186
-PAGES = ('source', 'options', 'advanced', 'log')
-PAGE_ICONS = {'source': '📦', 'options': '⚙', 'advanced': '🛠', 'log': '📜'}
+PAGES = ('source', 'options', 'advanced', 'log', 'report')
+PAGE_ICONS = {'source': '📦', 'options': '⚙', 'advanced': '🛠', 'log': '📜',
+              'report': '📊'}
 ENTRY_TONES = {'new': 'GREEN', 'fix': 'RED', 'change': 'ACCENT'}
 
 
@@ -128,7 +129,7 @@ class ScrollArea:
         self._sync_bar()
 
     def _on_canvas(self, event):
-        self.canvas.itemconfigure(self.window, width=event.width)
+        self.canvas.itemconfigure(self.window, width=max(60, event.width - 6))
         self._sync_bar()
 
     def _sync_bar(self):
@@ -202,6 +203,7 @@ class App:
         self._run_started: float | None = None
         self._timer_job = None
         self._page = saved.get('page', 'source')
+        self._report_data: dict = {}
         self._log_filter = 'all'
         self._step_state = 0
         self._steps_done = False
@@ -350,6 +352,7 @@ class App:
         self._build_page_options()
         self._build_page_advanced()
         self._build_page_log()
+        self._build_page_report()
 
         self._build_action_bar()
 
@@ -823,10 +826,7 @@ class App:
         self._check(safety, 'chk_backup', self.backup, 'desc_backup', 'tip_backup')
         self.convert_uncompressed = tk.BooleanVar(value=True)
         self._check(safety, 'chk_convert', self.convert_uncompressed,
-                    'desc_convert', 'tip_convert')
-        self.gen_report = tk.BooleanVar(value=True)
-        self._check(safety, 'chk_report', self.gen_report, 'desc_report',
-                    'tip_report', pady=(0, 0))
+                    'desc_convert', 'tip_convert', pady=(0, 0))
 
         gma = self._card(right, self.t('card_gma'), fill='x', pady=(14, 0))
         self.strip_whitelist = tk.BooleanVar(value=False)
@@ -882,6 +882,200 @@ class App:
         self.log_box.tag_configure('info', foreground=self.FG)
         self._paint_log_filter()
 
+    def _build_page_report(self):
+        host = self._page_shell('report')
+        self.report_host = tk.Frame(host, bg=self.BG)
+        self.report_host.pack(fill='both', expand=True)
+        self._render_report(self._report_data)
+
+    def _render_report(self, report: dict | None):
+        self._report_data = report or {}
+        host = getattr(self, 'report_host', None)
+        if host is None:
+            return
+        for child in host.winfo_children():
+            child.destroy()
+
+        if not self._report_data:
+            self._report_placeholder(host)
+            return
+
+        data = self._report_data
+        card = self._card(host, self.t('report_for_addon',
+                                       name=data.get('addon', '—')), fill='x')
+        tiles = tk.Frame(card, bg=self.CARD)
+        tiles.pack(fill='x')
+        summary = data.get('summary', {})
+        delta = summary.get('reduction', '—')
+        delta_tone = self.GREEN if delta.startswith('-') else (
+            self.YELLOW if delta.startswith('+') else self.FG)
+        cells = (
+            (self.t('report_sum_original'), summary.get('original', '—'), self.FG),
+            (self.t('report_sum_final'), summary.get('final', '—'), self.FG),
+            (self.t('report_sum_saved'), delta, delta_tone),
+            (self.t('report_sum_files'), summary.get('files', '—'), self.FG),
+        )
+        for column, (label, value, tone) in enumerate(cells):
+            cell = tk.Frame(tiles, bg=self.CARD)
+            cell.grid(row=0, column=column, sticky='w')
+            tiles.columnconfigure(column, weight=1, uniform='tile')
+            tk.Label(cell, text=label.upper(), bg=self.CARD, fg=self.SUB,
+                     font=('Segoe UI', 7, 'bold')).pack(anchor='w')
+            tk.Label(cell, text=value, bg=self.CARD, fg=tone,
+                     font=('Segoe UI', 15, 'bold')).pack(anchor='w')
+
+        roles = data.get('roles', [])
+        if roles:
+            section = self._report_section(host, self.t('report_sec_roles'),
+                                           sum(len(i) for _, i in roles))
+            for role, items in roles:
+                self._report_group(section, self.t(role), items)
+
+        orphans = data.get('orphans', [])
+        if orphans:
+            section = self._report_section(host, self.t('report_sec_orphans'),
+                                           len(orphans))
+            badge = (self.t('report_removed_badge') if data.get('removed')
+                     else self.t('report_kept_badge'))
+            tone = self.RED if data.get('removed') else self.YELLOW
+            strip = tk.Frame(section, bg=self.CARD)
+            strip.pack(anchor='w', pady=(0, 6))
+            self._pill(strip, badge, tone)
+            self._report_paths(section, orphans)
+
+        duplicates = data.get('duplicates', [])
+        if duplicates:
+            section = self._report_section(host, self.t('report_sec_dups'),
+                                           len(duplicates))
+            for group in duplicates:
+                self._report_group(
+                    section, self.t('report_dup_group', n=len(group)), group)
+
+        audit = data.get('audit', [])
+        if audit:
+            section = self._report_section(host, self.t('report_sec_audit'),
+                                           len(audit))
+            for issue in audit:
+                row = tk.Frame(section, bg=self.CARD)
+                row.pack(fill='x', pady=1)
+                tk.Label(row, text=self._audit_label(issue['issue']),
+                         bg=self.YELLOW,
+                         fg=self.ON_ACCENT, font=('Segoe UI', 7, 'bold'),
+                         padx=6, width=17).pack(side='left', anchor='n')
+                tk.Label(row, text=issue['detail'], bg=self.CARD, fg=self.SUB,
+                         font=('Consolas', 8), width=21,
+                         anchor='w').pack(side='left', padx=(10, 6))
+                tk.Label(row, text=issue['path'], bg=self.CARD, fg=self.FG,
+                         font=('Consolas', 8), anchor='w').pack(side='left')
+
+        if not (roles or orphans or duplicates or audit):
+            empty = self._card(host, "", fill='x', pady=(14, 0))
+            tk.Label(empty, text=self.t('report_empty'), bg=self.CARD,
+                     fg=self.SUB, font=('Segoe UI', 9)).pack(anchor='w')
+
+        footer = tk.Frame(host, bg=self.BG)
+        footer.pack(fill='x', pady=(14, 0))
+        ttk.Button(footer, text=self.t('report_copy'), style='Ghost.TButton',
+                   command=self._copy_report).pack(side='left')
+
+    def _audit_label(self, issue: str) -> str:
+        return self.t('report_' + issue)
+
+    def _report_placeholder(self, host):
+        card = self._card(host, "", fill='x')
+        tk.Label(card, text="📊", bg=self.CARD, fg=self.BORDER,
+                 font=('Segoe UI', 26)).pack(pady=(14, 6))
+        tk.Label(card, text=self.t('report_waiting'), bg=self.CARD, fg=self.FG,
+                 font=('Segoe UI', 11, 'bold')).pack()
+        tk.Label(card, text=self.t('report_waiting_hint'), bg=self.CARD,
+                 fg=self.SUB, font=('Segoe UI', 9), justify='center',
+                 wraplength=420).pack(pady=(4, 4))
+        if not self.check_materials.get():
+            tk.Label(card, text=self.t('report_needs_check'), bg=self.CARD,
+                     fg=self.YELLOW, font=('Segoe UI', 8), justify='center',
+                     wraplength=420).pack(pady=(6, 14))
+        else:
+            tk.Frame(card, bg=self.CARD, height=14).pack()
+
+    def _report_section(self, host, title: str, count: int):
+        card = self._card(host, "", fill='x', pady=(14, 0))
+        head = tk.Frame(card, bg=self.CARD)
+        head.pack(fill='x', pady=(0, 8))
+        tk.Label(head, text=title, bg=self.CARD, fg=self.FG,
+                 font=('Segoe UI', 10, 'bold')).pack(side='left')
+        tk.Label(head, text=str(count), bg=self.ACCENT, fg=self.ON_ACCENT,
+                 font=('Segoe UI', 7, 'bold'), padx=7).pack(side='left',
+                                                            padx=(8, 0))
+        return card
+
+    def _report_group(self, parent, title: str, items: list):
+        holder = tk.Frame(parent, bg=self.CARD)
+        holder.pack(fill='x', pady=1)
+
+        head = tk.Frame(holder, bg=self.CARD, cursor='hand2')
+        head.pack(fill='x')
+        arrow = tk.Label(head, text="▸", bg=self.CARD, fg=self.SUB,
+                         font=('Segoe UI', 8))
+        arrow.pack(side='left')
+        tk.Label(head, text=f"{title}  ({len(items)})", bg=self.CARD,
+                 fg=self.FG, font=('Segoe UI', 9)).pack(side='left', padx=(5, 0))
+
+        body = tk.Frame(holder, bg=self.CARD)
+
+        def toggle(_event=None):
+            if body.winfo_ismapped():
+                body.pack_forget()
+                arrow.configure(text="▸")
+            else:
+                body.pack(fill='x', padx=(16, 0), pady=(2, 4))
+                arrow.configure(text="▾")
+
+        for widget in (head, arrow) + tuple(head.winfo_children()):
+            widget.bind('<Button-1>', toggle)
+
+        self._report_paths(body, items)
+        return holder
+
+    def _report_paths(self, parent, items: list):
+        for path in items:
+            tk.Label(parent, text=path, bg=self.CARD, fg=self.SUB,
+                     font=('Consolas', 8), anchor='w').pack(anchor='w')
+
+    def _report_text(self) -> str:
+        data = self._report_data
+        if not data:
+            return ""
+        lines = [self.t('report_for_addon', name=data.get('addon', '—')), ""]
+        summary = data.get('summary', {})
+        for key, value in (('report_sum_original', summary.get('original')),
+                           ('report_sum_final', summary.get('final')),
+                           ('report_sum_saved', summary.get('reduction')),
+                           ('report_sum_files', summary.get('files'))):
+            lines.append(f"{self.t(key)} : {value}")
+
+        for title, entries in ((self.t('report_sec_roles'),
+                                [f"{self.t(role)} ({len(items)})"
+                                 for role, items in data.get('roles', [])]),
+                               (self.t('report_sec_orphans'),
+                                list(data.get('orphans', []))),
+                               (self.t('report_sec_dups'),
+                                [" | ".join(g) for g in data.get('duplicates', [])]),
+                               (self.t('report_sec_audit'),
+                                [f"{self._audit_label(i['issue'])} — "
+                                 f"{i['detail']} — {i['path']}"
+                                 for i in data.get('audit', [])])):
+            if entries:
+                lines += ["", f"── {title} ──"] + [f"  {e}" for e in entries]
+        return "\n".join(lines)
+
+    def _copy_report(self):
+        text = self._report_text()
+        if not text:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self._set_status(self.t('report_copied'))
+
     def _build_action_bar(self):
         tk.Frame(self.root, bg=self.BORDER, height=1).pack(side='bottom', fill='x')
         bar = tk.Frame(self.root, bg=self.SIDEBAR)
@@ -925,9 +1119,10 @@ class App:
         self.stop_btn = ttk.Button(controls, text=self.t('btn_cancel'),
                                    command=self._cancel, state='disabled')
         self.stop_btn.pack(side='right', padx=(0, 8))
-        self.report_btn = ttk.Button(controls, text=self.t('report_open'),
+        self.report_btn = ttk.Button(controls, text=self.t('report_show'),
                                      style='Ghost.TButton',
-                                     command=self._open_report, state='disabled')
+                                     command=lambda: self._show_page('report'),
+                                     state='disabled')
         self.report_btn.pack(side='right', padx=(0, 8))
         self.open_btn = ttk.Button(controls, text=self.t('btn_open_output'),
                                    style='Ghost.TButton',
@@ -1238,7 +1433,6 @@ class App:
             'dedup_textures':    self.dedup_tex.get(),
             'strip_non_whitelisted': self.strip_whitelist.get(),
             'convert_uncompressed': self.convert_uncompressed.get(),
-            'gen_report':        self.gen_report.get(),
             'target_size_mb':    target_size_mb,
             'dry_run':           self.dry_run.get(),
             'backup_original':   self.backup.get(),
@@ -1311,7 +1505,8 @@ class App:
         comp = self._compressor
         if comp and comp.final_size is not None:
             self.open_btn.configure(state='normal')
-            if comp.report_path and Path(comp.report_path).exists():
+            self._render_report(comp.report)
+            if comp.report:
                 self.report_btn.configure(state='normal')
             before = Compressor._fmt_size(comp.original_size)
             after = Compressor._fmt_size(comp.final_size)
@@ -1366,7 +1561,6 @@ class App:
                                 body + "\n\n" + self.t('summary_dry_run'))
             return
 
-        report_path = getattr(comp, 'report_path', None)
         win, wrap = self._dialog(self.t('summary_title'))
 
         tk.Label(wrap, text=self.t('summary_title'), bg=self.BG, fg=self.FG,
@@ -1398,9 +1592,10 @@ class App:
         ttk.Button(row, text=self.t('summary_open_folder'), style='Accent.TButton',
                    command=lambda: (win.destroy(), self._open_output())).pack(
             side='left')
-        if report_path and Path(report_path).exists():
-            ttk.Button(row, text=self.t('report_open'),
-                       command=lambda: self._open_path(report_path)).pack(
+        if comp.report:
+            ttk.Button(row, text=self.t('report_show'),
+                       command=lambda: (win.destroy(),
+                                        self._show_page('report'))).pack(
                 side='left', padx=(8, 0))
         ttk.Button(row, text=self.t('summary_close'), command=win.destroy).pack(
             side='right')
@@ -1557,12 +1752,6 @@ class App:
     def _open_output(self):
         output = Path(self.output_var.get().strip())
         self._open_path(output if output.is_dir() else output.parent)
-
-    def _open_report(self):
-        comp = self._compressor
-        report_path = getattr(comp, 'report_path', None) if comp else None
-        if report_path and Path(report_path).exists():
-            self._open_path(report_path)
 
     def _open_path(self, target):
         target = str(target)
@@ -1723,7 +1912,6 @@ class App:
             'dedup_tex':           self.dedup_tex.get(),
             'strip_whitelist':     self.strip_whitelist.get(),
             'convert_uncompressed': self.convert_uncompressed.get(),
-            'gen_report':          self.gen_report.get(),
             'comp_tex':            self.comp_tex.get(),
             'max_res_no_limit':    not self.max_res.get().isdigit(),
             'max_res':             self.max_res.get(),
@@ -1754,7 +1942,6 @@ class App:
         self.dedup_tex.set(state.get('dedup_tex', False))
         self.strip_whitelist.set(state.get('strip_whitelist', False))
         self.convert_uncompressed.set(state.get('convert_uncompressed', True))
-        self.gen_report.set(state.get('gen_report', True))
         self.comp_tex.set(state.get('comp_tex', True))
         self.max_res.set(self.t('no_limit') if state.get('max_res_no_limit', False)
                          else state.get('max_res', '1024'))

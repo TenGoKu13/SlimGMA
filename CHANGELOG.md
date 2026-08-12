@@ -4,8 +4,8 @@
 
 ### Refonte complète de l'affichage
 - **Navigation latérale** : les onglets empilés laissent place à une barre
-  latérale à quatre pages (Source, Options, Avancé, Journal). Chaque page a son
-  titre, son sous-titre et défile indépendamment si la fenêtre est petite.
+  latérale à cinq pages (Source, Options, Avancé, Journal, Rapport). Chaque page
+  a son titre, son sous-titre et défile indépendamment si la fenêtre est petite.
 - **Barre d'action permanente** : progression, pourcentage, statut,
   chronomètre, fichier courant et boutons Compresser / Annuler / Ouvrir le
   dossier / Ouvrir le rapport restent visibles depuis n'importe quelle page.
@@ -22,6 +22,20 @@
 - **Filtres de journal en segments** cliquables et fenêtre « À propos »
   redessinée, avec lien vers le dépôt.
 - La page active est mémorisée entre deux lancements.
+
+### Rapport d'analyse dans l'application
+- **Le rapport HTML est supprimé.** Il fallait quitter l'app, retrouver un
+  fichier sur le disque et l'ouvrir dans un navigateur pour lire l'analyse.
+- **Nouvelle page « Rapport »** dans la barre latérale : synthèse (taille
+  d'origine, taille finale, réduction, nombre de fichiers), rôles des textures
+  en listes dépliables, fichiers inutilisés, doublons exacts et audit qualité.
+- Bouton **Copier le rapport** : version texte prête à coller dans un ticket
+  ou sur Discord.
+- Le rapport suit le changement de langue (les libellés sont traduits à
+  l'affichage, plus au moment de la compression).
+- L'option « Générer un rapport HTML » et le drapeau CLI `--no-report`
+  disparaissent : le rapport est désormais gratuit et toujours disponible.
+  `cpm/report.py` est supprimé.
 
 ### Nouveautés dans l'application
 - **Fenêtre « ✨ Nouveautés »** accessible depuis l'en-tête : les changements de

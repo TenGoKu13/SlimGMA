@@ -27,7 +27,6 @@ from .analysis import (
     audit_textures, VTF_UNCOMPRESSED_FORMATS, check_gma_whitelist,
     dedup_textures,
 )
-from .report import build_html_report
 
 
 class Compressor:
@@ -46,7 +45,7 @@ class Compressor:
         self.final_size: int | None = None
         self.reduction: float | None = None
         self.analysis: dict = {}
-        self.report_path: str | None = None
+        self.report: dict = {}
         self._tex_cache: dict = {}
         self.lang        = opts.get('lang', 'fr')
 
@@ -164,11 +163,10 @@ class Compressor:
                 reduction  = (1 - final_size / original_size) * 100 if original_size > 0 else 0
                 self.final_size = final_size
                 self.reduction  = reduction
+                self.report     = self.build_report(files, src.stem)
                 self.log("")
                 self.log(self.t('final_size', size=self._fmt_size(final_size)))
                 self.log(self.t('final_reduction', pct=f"{reduction:.1f}"))
-                if self.opts.get('gen_report', True):
-                    self._write_html_report(files, src)
                 self.log(self.t('success'))
                 self.set_status(self.t('status_done'))
             else:
@@ -401,72 +399,28 @@ class Compressor:
             'removed': remove,
         }
 
-    def _build_report_dict(self, files: dict, addon_name: str) -> dict:
-        a = self.analysis or {}
-        audit_lbl = {
-            'audit_oversized':    self.t('report_audit_oversized'),
-            'audit_uncompressed': self.t('report_audit_uncompressed'),
-            'audit_npot':         self.t('report_audit_npot'),
-        }
-        roles = [(self.t(role), items) for role, items in a.get('roles', {}).items()]
-        orphans = list(a.get('orphan_vtf', [])) + list(a.get('orphan_vmt', []))
-        audit = [{'path': it['path'], 'label': audit_lbl.get(it['issue'], it['issue']),
-                  'detail': it['detail']} for it in a.get('audit', [])]
-
+    def reduction_label(self) -> str:
         if self.reduction is None:
-            reduction = '—'
-        else:
-            reduction = f"{'-' if self.reduction >= 0 else '+'}{abs(self.reduction):.1f}%"
+            return '—'
+        return f"{'-' if self.reduction >= 0 else '+'}{abs(self.reduction):.1f}%"
+
+    def build_report(self, files: dict, addon_name: str) -> dict:
+        a = self.analysis or {}
         return {
-            'title': self.t('report_title', name=addon_name),
-            'subtitle': self.t('report_subtitle'),
+            'addon': addon_name,
             'removed': a.get('removed', False),
             'summary': {
                 'original': self._fmt_size(self.original_size or 0),
                 'final': self._fmt_size(self.final_size or 0),
-                'reduction': reduction,
+                'reduction': self.reduction_label(),
                 'files': str(sum(1 for k in files if k != '__meta__')),
             },
-            'roles': roles,
-            'orphans': orphans,
-            'duplicates': a.get('duplicates', []),
-            'audit': audit,
-            'labels': {
-                'original': self.t('report_sum_original'),
-                'final': self.t('report_sum_final'),
-                'saved': self.t('report_sum_saved'),
-                'files': self.t('report_sum_files'),
-                'sec_roles': self.t('report_sec_roles'),
-                'sec_orphans': self.t('report_sec_orphans'),
-                'sec_dups': self.t('report_sec_dups'),
-                'sec_audit': self.t('report_sec_audit'),
-                'col_texture': self.t('report_col_texture'),
-                'col_issue': self.t('report_col_issue'),
-                'col_detail': self.t('report_col_detail'),
-                'removed': self.t('report_removed_badge'),
-                'kept': self.t('report_kept_badge'),
-                'empty': self.t('report_empty'),
-            },
+            'roles': [(role, list(items)) for role, items in a.get('roles', {}).items()],
+            'orphans': list(a.get('orphan_vtf', [])) + list(a.get('orphan_vmt', [])),
+            'duplicates': [list(g) for g in a.get('duplicates', [])],
+            'audit': [{'path': it['path'], 'issue': it['issue'],
+                       'detail': it['detail']} for it in a.get('audit', [])],
         }
-
-    def _write_html_report(self, files: dict, src: Path) -> None:
-        if self.opts.get('dry_run'):
-            return
-        try:
-            out = Path(self.opts['output'])
-            fmt = self.opts.get('output_format', 'folder')
-            if fmt == 'folder':
-                out.mkdir(parents=True, exist_ok=True)
-                report_path = out / 'rapport_compression.html'
-            else:
-                stem = out.stem or 'addon'
-                report_path = out.parent / (stem + '_rapport.html')
-            html = build_html_report(self._build_report_dict(files, src.stem))
-            report_path.write_text(html, encoding='utf-8')
-            self.report_path = str(report_path)
-            self.log(self.t('report_written', path=report_path))
-        except Exception:
-            pass
 
     def _optimize_textures(self, files: dict, max_res, quality: int, quiet: bool = False) -> None:
         tex_files = {k: v for k, v in files.items()

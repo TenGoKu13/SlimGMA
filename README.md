@@ -26,6 +26,7 @@ latérale à quatre pages, un bandeau d'étapes et une barre d'action fixe :
 │    Options │  └────────────────────────────────────────┘  │
 │    Avancé  │  Destination : …                             │
 │    Journal │                                              │
+│    Rapport │                                              │
 │  ────────  ├──────────────────────────────────────────────┤
 │  Pillow ●  │  ①─②─③─④─⑤─⑥─⑦   Textures                    │
 │  vtflib ●  │  ▬▬▬▬▬▬▬▬▬▬▬ 58%      [⏹ Annuler] [▶ Compresser] │
@@ -36,6 +37,7 @@ latérale à quatre pages, un bandeau d'étapes et une barre d'action fixe :
 - **Options** — profils rapides, nettoyage, textures, script Lua
 - **Avancé** — sons, archive, sécurité, taille cible, compatibilité GMA
 - **Journal** — trace filtrable, avec compteur d'avertissements dans le menu
+- **Rapport** — analyse de l'addon après compression, directement dans l'app
 
 L'en-tête donne accès au thème, à la langue, à « À propos » et à la fenêtre
 **✨ Nouveautés**, qui liste les changements de chaque version et signale d'un
@@ -60,7 +62,7 @@ d'action restent visibles depuis n'importe quelle page.
 | **Whitelist GMA** | Signale (ou retire) les fichiers que GMod refuserait au montage du `.gma` |
 | **Audit qualité** | Repère les textures surdimensionnées, non compressées ou non puissance de 2 |
 | **Recompression DXT** | Convertit les `.vtf` RGBA/BGR volumineux en DXT (avec vtflib) |
-| **Rapport HTML** | Récapitulatif visuel autonome (rôles, orphelins, doublons, audit) |
+| **Rapport intégré** | Page « Rapport » dans l'app : synthèse, rôles des textures, fichiers inutilisés, doublons, audit — copiable en un clic |
 | **Optimiser les textures** | Redimensionne et recompresse `.vtf`, `.png`, `.jpg`, `.tga` — en parallèle (multi-thread) |
 | **Résolution max des textures** | 256 / 512 / 1024 / 2048 / Aucune limite |
 | **Qualité des textures** | Curseur de 10 % à 100 % |
@@ -143,7 +145,6 @@ source output               Chemins source et sortie
 --strip-non-whitelisted     Retirer les fichiers refusés par la whitelist GMA
 --no-convert-uncompressed   Ne pas recompresser les .vtf non compressés en DXT
 --no-addon-json             Ne pas générer addon.json s'il manque (sortie dossier)
---no-report                 Ne pas générer le rapport HTML d'analyse
 --target-size MO            Taille cible en Mo (ajuste résolution/qualité automatiquement)
 --dry-run                   Mode aperçu : affiche les changements sans rien écrire
 --backup                    Sauvegarde l'original avant écrasement
@@ -180,7 +181,6 @@ cpm/
 ├── changelog.py    Nouveautés affichées dans l'application
 ├── gma.py          Lecteur / écrivain .gma
 ├── analysis.py     Moteur d'analyse (pur, testable)
-├── report.py       Rapport HTML
 ├── compressor.py   Logique de compression
 ├── gui.py          Interface graphique tkinter
 └── cli.py          Point d'entrée ligne de commande
@@ -202,7 +202,7 @@ pytest -q
 ```
 
 Les tests couvrent le moteur d'analyse (parsing `.mdl`/`.vmt`/`.vtf`, graphe de
-dépendances, doublons, dédup, whitelist GMA, audit, rapport HTML), le
+dépendances, doublons, dédup, whitelist GMA, audit, données du rapport), le
 round-trip `.gma` et la génération Lua — sans nécessiter d'interface graphique.
 La CI exécute la suite avant chaque build de l'exécutable Windows.
 

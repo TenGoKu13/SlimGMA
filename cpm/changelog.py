@@ -9,8 +9,8 @@ RELEASES: list[dict] = [
         'date': '2026-08-12',
         'entries': [
             (CHANGE, {
-                'fr': "Interface entièrement redessinée : navigation latérale à quatre pages (Source, Options, Avancé, Journal) au lieu des onglets empilés.",
-                'en': "Completely redesigned interface: a four-page sidebar (Source, Options, Advanced, Log) replaces the stacked tabs.",
+                'fr': "Interface entièrement redessinée : navigation latérale à cinq pages (Source, Options, Avancé, Journal, Rapport) au lieu des onglets empilés.",
+                'en': "Completely redesigned interface: a five-page sidebar (Source, Options, Advanced, Log, Report) replaces the stacked tabs.",
             }),
             (NEW, {
                 'fr': "Barre d'action permanente : progression, chronomètre, fichier en cours et boutons restent visibles depuis n'importe quelle page.",
@@ -23,6 +23,10 @@ RELEASES: list[dict] = [
             (NEW, {
                 'fr': "Le nombre d'avertissements et d'erreurs s'affiche directement sur l'entrée « Journal ».",
                 'en': "Warning and error counts now show directly on the “Log” entry.",
+            }),
+            (CHANGE, {
+                'fr': "Le rapport d'analyse est désormais une page de l'application, plus un fichier HTML à ouvrir dans un navigateur. Il est copiable en un clic.",
+                'en': "The analysis report is now a page inside the app instead of an HTML file to open in a browser. One click copies it.",
             }),
             (NEW, {
                 'fr': "Cette fenêtre : les nouveautés de chaque version sont consultables depuis l'en-tête.",
@@ -45,8 +49,8 @@ RELEASES: list[dict] = [
                 'en': "The library detection line is no longer counted as an error in the log.",
             }),
             (FIX, {
-                'fr': "Le pourcentage affichait « --2.7 % » quand la sortie grossissait, dans la fenêtre de fin comme dans le rapport HTML.",
-                'en': "The percentage read “--2.7%” when the output grew, both in the summary window and the HTML report.",
+                'fr': "Le pourcentage affichait « --2.7 % » quand la sortie grossissait ; le signe est désormais correct, en +.",
+                'en': "The percentage read “--2.7%” when the output grew; the sign is now correct, as a +.",
             }),
         ],
     },

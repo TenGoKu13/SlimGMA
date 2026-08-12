@@ -7,7 +7,6 @@ from .analysis import (
     audit_textures, VTF_UNCOMPRESSED_FORMATS, is_gma_whitelisted,
     check_gma_whitelist, dedup_textures,
 )
-from .report import build_html_report
 from .compressor import Compressor
 from .cli import cli_main
 
@@ -16,5 +15,5 @@ __all__ = [
     'parse_vmt_refs', 'parse_mdl_materials', 'read_vtf_info',
     'build_dependency_graph', 'find_duplicate_textures', 'audit_textures',
     'VTF_UNCOMPRESSED_FORMATS', 'is_gma_whitelisted', 'check_gma_whitelist',
-    'dedup_textures', 'build_html_report', 'Compressor', 'cli_main',
+    'dedup_textures', 'Compressor', 'cli_main',
 ]
