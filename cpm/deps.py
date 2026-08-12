@@ -10,11 +10,10 @@ except ImportError:
     PIL_AVAILABLE = False
 
 try:
-    import vtflib
-    VTFLIB_AVAILABLE = True
-except ImportError:
-    vtflib = None
-    VTFLIB_AVAILABLE = False
+    import srctools.vtf
+    SRCTOOLS_AVAILABLE = True
+except Exception:
+    SRCTOOLS_AVAILABLE = False
 
 
 SUBPROCESS_FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if sys.platform == 'win32' else 0

@@ -46,7 +46,54 @@
 - Le contenu vit dans `cpm/changelog.py` (embarqué dans l'exécutable, donc
   lisible hors ligne). Un test refuse toute version publiée sans entrée.
 
+### Textures .vtf : la recompression DXT fonctionne enfin
+- **La dépendance `vtflib` n'existait pas sur PyPI.** `pip install vtflib`
+  échoue — donc `VTFLIB_AVAILABLE` était toujours faux, l'option
+  « Recompresser les textures en DXT » ne faisait **rien**, et les `.vtf`
+  n'étaient réduits que par troncature de mipmaps.
+- Remplacée par **`srctools`**, qui lit et écrit réellement le format VTF (DXT
+  compilé, aucune DLL externe). Ajoutée à `requirements.txt`, à `pyproject.toml`
+  et à l'exécutable Windows.
+- Nouveau module `cpm/vtf.py` : rééchantillonnage bilinéaire par halvings
+  successifs, régénération de la chaîne de mipmaps, et conversion vers **DXT1
+  ou DXT5 selon la transparence réellement utilisée** (une texture opaque ne
+  part plus en DXT5, deux fois trop lourd).
+- Cubemaps, textures multi-frames et fichiers illisibles sont laissés
+  intacts. La troncature de mipmaps reste le repli si `srctools` est absent.
+- Mesuré sur un addon de test de 26,7 Mo : **1,7 Mo en sortie (-93,6 %)**.
+
+### Mode batch
+- **Un batch réussi s'affichait comme un échec** : `_run_batch()` ne
+  renseignait ni `final_size`, ni `reduction`, ni le rapport, si bien que la
+  GUI montrait une pastille rouge, aucun récapitulatif et les boutons de fin
+  désactivés — alors que les addons étaient bien compressés.
+- Les totaux sont désormais agrégés et le rapport liste chaque addon traité
+  avec sa taille finale et son gain.
+
+### Ligne de commande
+- **`--no-chands` et `--no-unused` faisaient l'inverse de leur nom** : ils
+  *activaient* la suppression. La CLI ne supprimait donc rien par défaut, là où
+  la GUI supprimait les deux — même addon, deux résultats.
+- Les défauts s'alignent sur la GUI : C-Hands et fichiers inutiles sont
+  supprimés par défaut. **`--keep-chands` et `--keep-unused`** désactivent.
+- Les anciens drapeaux restent acceptés et affichent un avertissement de
+  dépréciation. Un script qui utilisait `--no-chands` obtient le même résultat
+  qu'avant ; un script qui ne l'utilisait **pas** verra désormais les C-Hands
+  supprimés.
+- `--gen-lua` supprimé : `store_true` avec `default=True`, il ne pouvait rien
+  faire et doublonnait `--no-lua`.
+
+### Tests de l'interface
+- La GUI (~2 000 lignes) n'était couverte par **aucun test**. Ajout de
+  `tests/test_gui.py` : construction des cinq pages, bascule thème/langue avec
+  conservation de l'état, profils, compression complète, mode batch, rapport,
+  changelog. Ils se sautent sans serveur X et tournent sous `xvfb-run` en CI.
+- Ajout de `tests/test_vtf.py` pour le pipeline VTF.
+- Suite : 29 → 57 tests.
+
 ### Corrections
+- Le récapitulatif de fin en mode aperçu utilise la fenêtre redessinée au lieu
+  d'une boîte de dialogue système.
 - La ligne de détection des bibliothèques (`PIL : ✗`) n'est plus comptée comme
   une erreur dans le journal ni dans le compteur d'alertes.
 - Le filtre du journal et l'état des étapes survivent au changement de thème ou

@@ -21,7 +21,7 @@ try:
 except ImportError:
     DND_AVAILABLE = False
 
-from .deps import PIL_AVAILABLE, VTFLIB_AVAILABLE, FFMPEG_AVAILABLE
+from .deps import PIL_AVAILABLE, SRCTOOLS_AVAILABLE, FFMPEG_AVAILABLE
 from .constants import (
     VERSION, LICENSE_NAME, REPO_URL, CONFIG_PATH,
     TEXTURE_EXTENSIONS, SOUND_EXTENSIONS,
@@ -436,7 +436,7 @@ class App:
 
         tk.Label(bottom, text=self.t('sidebar_libs'), bg=self.SIDEBAR,
                  fg=self.SUB, font=('Segoe UI', 7, 'bold')).pack(anchor='w')
-        for label, ok in (('Pillow', PIL_AVAILABLE), ('vtflib', VTFLIB_AVAILABLE),
+        for label, ok in (('Pillow', PIL_AVAILABLE), ('srctools', SRCTOOLS_AVAILABLE),
                           ('ffmpeg', FFMPEG_AVAILABLE)):
             row = tk.Frame(bottom, bg=self.SIDEBAR)
             row.pack(anchor='w', fill='x')
@@ -729,7 +729,7 @@ class App:
         self.tex_qual.trace_add('write', lambda *_: self.qual_lbl.config(
             text=f"{self.tex_qual.get()}%"))
 
-        if not PIL_AVAILABLE and not VTFLIB_AVAILABLE:
+        if not PIL_AVAILABLE and not SRCTOOLS_AVAILABLE:
             tk.Label(self.tex_sub, text=self.t('pillow_hint'), bg=self.CARD,
                      fg=self.YELLOW, font=('Segoe UI', 8)).pack(anchor='w',
                                                                 pady=(5, 0))
@@ -924,6 +924,25 @@ class App:
             tk.Label(cell, text=value, bg=self.CARD, fg=tone,
                      font=('Segoe UI', 15, 'bold')).pack(anchor='w')
 
+        batch = data.get('batch', [])
+        if batch:
+            section = self._report_section(host, self.t('report_sec_batch'),
+                                           len(batch))
+            for entry in batch:
+                row = tk.Frame(section, bg=self.CARD)
+                row.pack(fill='x', pady=1)
+                tk.Label(row, text=entry['name'], bg=self.CARD, fg=self.FG,
+                         font=('Segoe UI', 9), anchor='w',
+                         width=28).pack(side='left')
+                tk.Label(row, text=entry['size'], bg=self.CARD, fg=self.SUB,
+                         font=('Consolas', 8), anchor='w',
+                         width=12).pack(side='left')
+                delta = entry['delta']
+                tk.Label(row, text=delta, bg=self.CARD,
+                         fg=self.GREEN if delta.startswith('-') else self.YELLOW,
+                         font=('Segoe UI', 9, 'bold'),
+                         anchor='w').pack(side='left')
+
         roles = data.get('roles', [])
         if roles:
             section = self._report_section(host, self.t('report_sec_roles'),
@@ -968,7 +987,7 @@ class App:
                 tk.Label(row, text=issue['path'], bg=self.CARD, fg=self.FG,
                          font=('Consolas', 8), anchor='w').pack(side='left')
 
-        if not (roles or orphans or duplicates or audit):
+        if not (batch or roles or orphans or duplicates or audit):
             empty = self._card(host, "", fill='x', pady=(14, 0))
             tk.Label(empty, text=self.t('report_empty'), bg=self.CARD,
                      fg=self.SUB, font=('Segoe UI', 9)).pack(anchor='w')
@@ -1053,7 +1072,10 @@ class App:
                            ('report_sum_files', summary.get('files'))):
             lines.append(f"{self.t(key)} : {value}")
 
-        for title, entries in ((self.t('report_sec_roles'),
+        for title, entries in ((self.t('report_sec_batch'),
+                                [f"{e['name']} — {e['size']} ({e['delta']})"
+                                 for e in data.get('batch', [])]),
+                               (self.t('report_sec_roles'),
                                 [f"{self.t(role)} ({len(items)})"
                                  for role, items in data.get('roles', [])]),
                                (self.t('report_sec_orphans'),
@@ -1556,10 +1578,9 @@ class App:
                       delta=delta)
         if elapsed:
             body += "\n" + self.t('summary_elapsed', dur=elapsed)
-        if comp.opts.get('dry_run'):
-            messagebox.showinfo(self.t('summary_title'),
-                                body + "\n\n" + self.t('summary_dry_run'))
-            return
+        dry_run = bool(comp.opts.get('dry_run'))
+        if dry_run:
+            body += "\n\n" + self.t('summary_dry_run')
 
         win, wrap = self._dialog(self.t('summary_title'))
 
@@ -1589,14 +1610,17 @@ class App:
 
         row = tk.Frame(wrap, bg=self.BG)
         row.pack(fill='x')
-        ttk.Button(row, text=self.t('summary_open_folder'), style='Accent.TButton',
-                   command=lambda: (win.destroy(), self._open_output())).pack(
-            side='left')
+        if not dry_run:
+            ttk.Button(row, text=self.t('summary_open_folder'),
+                       style='Accent.TButton',
+                       command=lambda: (win.destroy(), self._open_output())).pack(
+                side='left')
         if comp.report:
             ttk.Button(row, text=self.t('report_show'),
+                       style='TButton' if not dry_run else 'Accent.TButton',
                        command=lambda: (win.destroy(),
                                         self._show_page('report'))).pack(
-                side='left', padx=(8, 0))
+                side='left', padx=(0 if dry_run else 8, 0))
         ttk.Button(row, text=self.t('summary_close'), command=win.destroy).pack(
             side='right')
 
@@ -1630,7 +1654,7 @@ class App:
         tk.Label(wrap, text=self.t('sidebar_libs'), bg=self.BG, fg=self.SUB,
                  font=('Segoe UI', 8, 'bold')).pack(anchor='w')
         for name, ok in ((self.t('lib_pillow'), PIL_AVAILABLE),
-                         (self.t('lib_vtflib'), VTFLIB_AVAILABLE),
+                         (self.t('lib_srctools'), SRCTOOLS_AVAILABLE),
                          (self.t('lib_ffmpeg'), FFMPEG_AVAILABLE)):
             tk.Label(wrap, text=f"{'✓' if ok else '✗'}  {name}", bg=self.BG,
                      fg=self.GREEN if ok else self.SUB,
@@ -1880,7 +1904,7 @@ class App:
         self._log(self.t('log_app_version', version=VERSION))
         self._log(
             f"PIL : {'✓' if PIL_AVAILABLE else '✗'}  |  "
-            f"VTFLib : {'✓' if VTFLIB_AVAILABLE else '✗'}  |  "
+            f"srctools : {'✓' if SRCTOOLS_AVAILABLE else '✗'}  |  "
             f"ffmpeg : {'✓' if FFMPEG_AVAILABLE else '✗'}",
             tag='info',
         )

@@ -11,8 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .deps import (
-    PIL_AVAILABLE, Image, VTFLIB_AVAILABLE, vtflib, FFMPEG_AVAILABLE,
-    run_hidden,
+    PIL_AVAILABLE, Image, SRCTOOLS_AVAILABLE, FFMPEG_AVAILABLE, run_hidden,
 )
 from .constants import (
     VERSION, CONFIG_PATH, CHAND_PATTERNS, USELESS_EXTENSIONS,
@@ -21,6 +20,7 @@ from .constants import (
 )
 from .i18n import t
 from .gma import GMAFile
+from . import vtf as vtf_tools
 from .analysis import (
     norm_key, resolve_material_ref, parse_vmt_refs, parse_mdl_materials,
     read_vtf_info, build_dependency_graph, find_duplicate_textures,
@@ -436,8 +436,8 @@ class Compressor:
             self.log(self.t('textures_found', n=len(tex_files)))
             if max_res is None:
                 self.log(self.t('no_res_limit'))
-            elif not VTFLIB_AVAILABLE:
-                self.log(self.t('no_vtflib', max_res=max_res))
+            elif not SRCTOOLS_AVAILABLE:
+                self.log(self.t('no_srctools', max_res=max_res))
             if workers > 1 and len(tex_files) > 1:
                 self.log(self.t('textures_parallel', n=workers))
 
@@ -544,47 +544,15 @@ class Compressor:
             self.log(self.t('target_not_reached', size=self._fmt_size(chosen_size or 0), target=self._fmt_size(target_bytes)))
 
     def _process_vtf(self, path: str, data: bytes, max_res, quality: int) -> bytes:
-        if VTFLIB_AVAILABLE:
+        if SRCTOOLS_AVAILABLE:
             try:
-                return self._process_vtf_vtflib(data, max_res, quality)
+                rebuilt = vtf_tools.optimize(
+                    data, max_res, self.opts.get('convert_uncompressed', True))
+                if rebuilt:
+                    return rebuilt
             except Exception:
                 pass
         return self._process_vtf_mipstrip(data, max_res)
-
-    _vtflib_lock = threading.Lock()
-
-    def _process_vtf_vtflib(self, data: bytes, max_res, quality: int) -> bytes:
-        with self._vtflib_lock:
-            lib = vtflib.VTFLib()
-            lib.image_load_lump(data)
-            w, h = lib.width(), lib.height()
-            if max_res and (w > max_res or h > max_res):
-                new_w = min(w, max_res)
-                new_h = min(h, max_res)
-                lib.image_resize(new_w, new_h)
-
-            if self.opts.get('convert_uncompressed', True):
-                self._try_convert_dxt(lib, data)
-
-            return bytes(lib.image_save_lump())
-
-    @staticmethod
-    def _try_convert_dxt(lib, original: bytes) -> None:
-        info = read_vtf_info(original)
-        if not info or info['format_name'] not in VTF_UNCOMPRESSED_FORMATS:
-            return
-        try:
-            fmt_enum = getattr(vtflib, 'VTFImageFormat', None)
-            convert = getattr(lib, 'image_convert', None)
-            if fmt_enum is None or convert is None:
-                return
-            has_alpha = bool(getattr(lib, 'image_has_alpha', lambda: True)())
-            target_name = 'IMAGE_FORMAT_DXT5' if has_alpha else 'IMAGE_FORMAT_DXT1'
-            target = getattr(fmt_enum, target_name, None)
-            if target is not None:
-                convert(target)
-        except Exception:
-            pass
 
     def _process_vtf_mipstrip(self, data: bytes, max_res) -> bytes:
         if max_res is None:
@@ -1003,7 +971,7 @@ class Compressor:
             )
             sub.run()
             if sub.final_size is not None:
-                results.append((name, sub.final_size, sub.reduction or 0.0))
+                results.append(sub)
             self.log("")
 
         self.set_progress(100)
@@ -1011,13 +979,37 @@ class Compressor:
 
         if results:
             self.log(self.t('batch_summary_header'))
-            for name, size, reduction in results:
-                self.log(self.t('batch_summary_line', name=name,
-                                 size=self._fmt_size(size), pct=f"{reduction:.1f}"))
+            for sub in results:
+                self.log(self.t('batch_summary_line',
+                                name=Path(sub.opts['source']).stem,
+                                size=self._fmt_size(sub.final_size),
+                                pct=f"{sub.reduction or 0.0:.1f}"))
             self.log("")
+            self._aggregate_batch(src, results)
 
         self.log(self.t('batch_done', n=len(results)))
         self.set_status(self.t('status_done'))
+
+    def _aggregate_batch(self, src: Path, results: list) -> None:
+        self.original_size = sum(s.original_size or 0 for s in results)
+        self.final_size = sum(s.final_size or 0 for s in results)
+        self.reduction = ((1 - self.final_size / self.original_size) * 100
+                          if self.original_size else 0.0)
+        self.report = {
+            'addon': src.name,
+            'removed': False,
+            'summary': {
+                'original': self._fmt_size(self.original_size),
+                'final': self._fmt_size(self.final_size),
+                'reduction': self.reduction_label(),
+                'files': str(sum(int(s.report.get('summary', {}).get('files', 0) or 0)
+                                 for s in results)),
+            },
+            'roles': [], 'orphans': [], 'duplicates': [], 'audit': [],
+            'batch': [{'name': Path(s.opts['source']).stem,
+                       'size': self._fmt_size(s.final_size),
+                       'delta': s.reduction_label()} for s in results],
+        }
 
     @staticmethod
     def _fmt_size(n: int) -> str:

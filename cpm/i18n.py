@@ -1,4 +1,5 @@
 STRINGS: dict[str, dict[str, str]] = {
+    'cli_deprecated': {'fr': "⚠ {flag} est déprécié : cette suppression est désormais active par défaut. Utilisez {alt} pour la désactiver.", 'en': "⚠ {flag} is deprecated: this removal is now on by default. Use {alt} to turn it off."},
     'cli_header': {'fr': "Compressez PM GMod v{version} – mode CLI\n", 'en': "Compressez PM GMod v{version} – CLI mode\n"},
 
     'loading_files':   {'fr': "Chargement des fichiers…", 'en': "Loading files…"},
@@ -45,7 +46,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'no_textures':     {'fr': "  Aucune texture trouvée.", 'en': "  No textures found."},
     'textures_found':  {'fr': "  {n} texture(s) trouvée(s)…", 'en': "  {n} texture(s) found…"},
     'no_res_limit':    {'fr': "  Résolution max : aucune limite (les .vtf seront copiés tels quels)", 'en': "  Max resolution: no limit (.vtf files copied as-is)"},
-    'no_vtflib':       {'fr': "  vtflib non installé : réduction des .vtf par troncature de mipmaps (résolution max {max_res}px)", 'en': "  vtflib not installed: .vtf reduced via mipmap truncation (max resolution {max_res}px)"},
+    'no_srctools':     {'fr': "  srctools absent : réduction des .vtf par troncature de mipmaps seulement (résolution max {max_res}px)", 'en': "  srctools missing: .vtf reduced via mipmap truncation only (max resolution {max_res}px)"},
     'texture_saving':  {'fr': "  {path} : -{size}", 'en': "  {path}: -{size}"},
     'textures_reduced':{'fr': "  Textures réduites : {reduced}/{total}", 'en': "  Textures reduced: {reduced}/{total}"},
     'vtf_unchanged':   {'fr': "  .vtf inchangés : {n} (déjà sous la résolution max, ou format/structure non pris en charge)", 'en': "  .vtf unchanged: {n} (already under max resolution, or unsupported format/structure)"},
@@ -155,6 +156,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'report_sec_orphans':  {'fr': "Fichiers inutilisés", 'en': "Unused files"},
     'report_sec_dups':     {'fr': "Doublons exacts", 'en': "Exact duplicates"},
     'report_sec_audit':    {'fr': "Audit qualité", 'en': "Quality audit"},
+    'report_sec_batch':    {'fr': "Addons traités", 'en': "Processed addons"},
     'report_removed_badge':{'fr': "supprimés", 'en': "removed"},
     'report_kept_badge':   {'fr': "conservés", 'en': "kept"},
     'report_empty':        {'fr': "Rien à signaler.", 'en': "Nothing to report."},
@@ -264,7 +266,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'chk_textures':  {'fr': "Optimiser les textures", 'en': "Optimize textures"},
     'label_max_res': {'fr': "Résolution max :", 'en': "Max resolution:"},
     'label_quality': {'fr': "Qualité :", 'en': "Quality:"},
-    'pillow_hint':   {'fr': "⚠  pip install Pillow  pour les images non-VTF", 'en': "⚠  pip install Pillow  for non-VTF images"},
+    'pillow_hint':   {'fr': "⚠  pip install Pillow srctools  pour tout optimiser", 'en': "⚠  pip install Pillow srctools  to optimize everything"},
 
     'chk_lua':         {'fr': "Générer le fichier Lua PM", 'en': "Generate Lua PM file"},
     'desc_lua':        {'fr': "  Crée/met à jour lua/autorun/sh_*_pm.lua", 'en': "  Creates/updates lua/autorun/sh_*_pm.lua"},
@@ -279,7 +281,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'zip_fast':           {'fr': "Rapide", 'en': "Fast"},
     'zip_max':            {'fr': "Max", 'en': "Max"},
     'lib_pillow':         {'fr': "Pillow (.png/.jpg/.tga)", 'en': "Pillow (.png/.jpg/.tga)"},
-    'lib_vtflib':         {'fr': "vtflib (.vtf natif)", 'en': "vtflib (native .vtf)"},
+    'lib_srctools':       {'fr': "srctools (redimensionnement .vtf + DXT)", 'en': "srctools (.vtf resize + DXT)"},
     'lib_ffmpeg':         {'fr': "ffmpeg (sons)", 'en': "ffmpeg (sounds)"},
 
     'chk_check_materials': {'fr': "Vérifier les matériaux/textures manquants", 'en': "Check for missing materials/textures"},
@@ -343,7 +345,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'tip_zip':               {'fr': "Niveau de compression de l'archive .zip (1 rapide → 9 maximum).", 'en': "Compression level of the .zip archive (1 fast → 9 maximum)."},
     'tip_dry_run':           {'fr': "Simule toute la compression et affiche le résultat sans écrire un seul fichier.", 'en': "Simulates the whole compression and shows the result without writing a single file."},
     'tip_backup':            {'fr': "Copie horodatée de la sortie existante avant de l'écraser.", 'en': "Timestamped copy of the existing output before overwriting it."},
-    'tip_convert':           {'fr': "Convertit les .vtf stockés sans compression (RGBA8888…) en DXT, 4 à 6× plus légers. Nécessite vtflib.", 'en': "Converts uncompressed .vtf files (RGBA8888…) to DXT, 4–6× smaller. Requires vtflib."},
+    'tip_convert':           {'fr': "Convertit les .vtf stockés sans compression (RGBA8888…) en DXT, 4 à 6× plus légers. Nécessite srctools.", 'en': "Converts uncompressed .vtf files (RGBA8888…) to DXT, 4–6× smaller. Requires srctools."},
     'tip_target_size':       {'fr': "Essaie plusieurs combinaisons résolution/qualité jusqu'à passer sous la taille visée.", 'en': "Tries several resolution/quality combinations until the output fits the target size."},
     'tip_batch':             {'fr': "La source doit contenir plusieurs sous-dossiers ou .gma : chacun est compressé séparément.", 'en': "The source must contain several subfolders or .gma files: each is compressed separately."},
     'tip_strip_whitelist':   {'fr': "GMod refuse de monter un .gma contenant des fichiers hors whitelist. Cette option les retire automatiquement.", 'en': "GMod refuses to mount a .gma containing non-whitelisted files. This option strips them automatically."},

@@ -41,6 +41,18 @@ RELEASES: list[dict] = [
                 'en': "The project is now free software: MIT license, contributing guide and issue templates published.",
             }),
             (FIX, {
+                'fr': "La recompression DXT ne faisait rien : elle dépendait d'une bibliothèque introuvable. Les .vtf sont maintenant vraiment redimensionnés et recompressés (jusqu'à -90 % sur un addon de textures).",
+                'en': "DXT recompression did nothing: it relied on a library that could not be installed. .vtf files are now genuinely resized and recompressed (up to -90% on a texture-heavy addon).",
+            }),
+            (FIX, {
+                'fr': "Un traitement par lot réussi s'affichait comme un échec, sans récapitulatif ni boutons de fin.",
+                'en': "A successful batch run was displayed as a failure, with no summary and no final buttons.",
+            }),
+            (CHANGE, {
+                'fr': "En ligne de commande, les C-Hands et les fichiers inutiles sont supprimés par défaut, comme dans l'interface. Utilisez --keep-chands et --keep-unused pour les garder.",
+                'en': "On the command line, C-Hands and junk files are removed by default, matching the interface. Use --keep-chands and --keep-unused to keep them.",
+            }),
+            (FIX, {
                 'fr': "L'application pouvait se figer en pleine compression : l'interface était pilotée depuis le thread de travail.",
                 'en': "The app could freeze mid-compression: the interface was driven from the worker thread.",
             }),

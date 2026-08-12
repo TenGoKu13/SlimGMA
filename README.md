@@ -61,9 +61,9 @@ d'action restent visibles depuis n'importe quelle page.
 | **Fusion des doublons (dédup)** | Fusionne les textures identiques en une copie unique et réécrit les `.vmt` — sans perte |
 | **Whitelist GMA** | Signale (ou retire) les fichiers que GMod refuserait au montage du `.gma` |
 | **Audit qualité** | Repère les textures surdimensionnées, non compressées ou non puissance de 2 |
-| **Recompression DXT** | Convertit les `.vtf` RGBA/BGR volumineux en DXT (avec vtflib) |
+| **Recompression DXT** | Convertit les `.vtf` non compressés en DXT1/DXT5 selon leur transparence réelle — 4 à 8× plus légers |
 | **Rapport intégré** | Page « Rapport » dans l'app : synthèse, rôles des textures, fichiers inutilisés, doublons, audit — copiable en un clic |
-| **Optimiser les textures** | Redimensionne et recompresse `.vtf`, `.png`, `.jpg`, `.tga` — en parallèle (multi-thread) |
+| **Optimiser les textures** | Redimensionne les `.vtf` (rééchantillonnage bilinéaire + régénération des mipmaps) ainsi que `.png`, `.jpg`, `.tga` — en parallèle |
 | **Résolution max des textures** | 256 / 512 / 1024 / 2048 / Aucune limite |
 | **Qualité des textures** | Curseur de 10 % à 100 % |
 | **Taille cible** | Ajuste automatiquement résolution/qualité pour atteindre une taille max donnée |
@@ -117,7 +117,7 @@ python compressez_pm.py
 ```bash
 python compressez_pm.py mon_addon/ sortie/
 
-python compressez_pm.py mon_addon.gma sortie.gma --no-chands --quality 70
+python compressez_pm.py mon_addon.gma sortie.gma --keep-chands --quality 70
 
 python compressez_pm.py mon_addon/ sortie.zip --format zip --max-res 512
 
@@ -129,8 +129,8 @@ python compressez_pm.py mon_addon/ sortie/ --compress-sounds --sound-quality 96k
 ```
 source output               Chemins source et sortie
 --format {folder,gma,zip}   Format de sortie (défaut : folder)
---no-chands                 Supprimer les C-Hands
---no-unused                 Supprimer les fichiers inutiles
+--keep-chands               Conserver les C-Hands (supprimés par défaut)
+--keep-unused               Conserver les fichiers inutiles (supprimés par défaut)
 --no-textures               Ne pas optimiser les textures
 --quality 10-100            Qualité des textures (défaut : 85)
 --max-res 256|512|1024|2048 Résolution max (défaut : 1024)
@@ -158,12 +158,19 @@ source output               Chemins source et sortie
 
 | Bibliothèque | Utilité | Obligatoire |
 |---|---|---|
+| `srctools` | Redimensionnement des `.vtf` et recompression DXT | Non (fortement recommandé) |
 | `Pillow` | Textures .png/.jpg/.tga | Non (recommandé) |
 | `tkinterdnd2` | Glisser-déposer (GUI) | Non (inclus dans l'.exe) |
 | `ffmpeg` | Sons .mp3/.wav/.ogg | Non |
 
-Les fichiers `.vtf` sont compressés nativement (sans dépendance).
-Sans `Pillow`/`ffmpeg`, les optimisations C-Hands, fichiers inutiles et ZIP fonctionnent toujours.
+Les trois premières sont installées par `pip install -r requirements.txt` et
+embarquées dans l'exécutable Windows.
+
+**Sans `srctools`**, les `.vtf` ne sont réduits que par troncature de mipmaps —
+aucune recompression DXT, et les textures sans chaîne de mipmaps restent
+intactes. C'est la différence entre un addon divisé par dix et un addon à peine
+allégé. Sans `Pillow`/`ffmpeg`, les optimisations C-Hands, fichiers inutiles et
+ZIP fonctionnent toujours.
 
 ---
 
@@ -175,11 +182,12 @@ point d'entrée et ré-exporte l'API publique) :
 ```
 compressez_pm.py   Point d'entrée (CLI + GUI)
 cpm/
-├── deps.py         Dépendances optionnelles (Pillow, vtflib, ffmpeg)
+├── deps.py         Dépendances optionnelles (Pillow, srctools, ffmpeg)
 ├── constants.py    Constantes globales
 ├── i18n.py         Traductions FR / EN
 ├── changelog.py    Nouveautés affichées dans l'application
 ├── gma.py          Lecteur / écrivain .gma
+├── vtf.py          Redimensionnement et recompression DXT des .vtf
 ├── analysis.py     Moteur d'analyse (pur, testable)
 ├── compressor.py   Logique de compression
 ├── gui.py          Interface graphique tkinter
@@ -203,7 +211,17 @@ pytest -q
 
 Les tests couvrent le moteur d'analyse (parsing `.mdl`/`.vmt`/`.vtf`, graphe de
 dépendances, doublons, dédup, whitelist GMA, audit, données du rapport), le
-round-trip `.gma` et la génération Lua — sans nécessiter d'interface graphique.
+round-trip `.gma`, la génération Lua, le pipeline `.vtf` (redimensionnement,
+choix DXT1/DXT5, cubemaps ignorés) et l'interface graphique elle-même
+(construction des pages, thème, langue, compression complète, mode batch).
+
+Les tests d'interface ont besoin d'un serveur X ; ils se sautent tout seuls
+sans écran, et tournent sous `xvfb-run` en CI :
+
+```bash
+xvfb-run -a pytest -q
+```
+
 La CI exécute la suite avant chaque build de l'exécutable Windows.
 
 ---
