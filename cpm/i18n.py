@@ -206,6 +206,16 @@ STRINGS: dict[str, dict[str, str]] = {
     'sidebar_libs': {'fr': "Bibliothèques", 'en': "Libraries"},
     'sidebar_oss':  {'fr': "Logiciel libre · MIT", 'en': "Free software · MIT"},
 
+    'btn_changelog':      {'fr': "✨ Nouveautés", 'en': "✨ What's new"},
+    'changelog_title':    {'fr': "Nouveautés", 'en': "What's new"},
+    'changelog_sub':      {'fr': "Ce qui a changé dans Compressez PM GMod", 'en': "What changed in Compressez PM GMod"},
+    'changelog_new':      {'fr': "NOUVEAU", 'en': "NEW"},
+    'changelog_fix':      {'fr': "CORRIGÉ", 'en': "FIXED"},
+    'changelog_change':   {'fr': "MODIFIÉ", 'en': "CHANGED"},
+    'changelog_current':  {'fr': "version installée", 'en': "installed version"},
+    'changelog_unseen':   {'fr': "Nouveautés depuis votre dernière utilisation", 'en': "New since you last used the app"},
+    'changelog_full':     {'fr': "Journal des modifications complet", 'en': "Full changelog"},
+
     'btn_browse':          {'fr': "📂 Parcourir", 'en': "📂 Browse"},
     'label_source_type':   {'fr': "Type source :", 'en': "Source type:"},
     'radio_folder':        {'fr': "Dossier", 'en': "Folder"},

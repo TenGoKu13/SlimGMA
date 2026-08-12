@@ -23,6 +23,15 @@
   redessinée, avec lien vers le dépôt.
 - La page active est mémorisée entre deux lancements.
 
+### Nouveautés dans l'application
+- **Fenêtre « ✨ Nouveautés »** accessible depuis l'en-tête : les changements de
+  chaque version y sont listés en FR/EN, étiquetés *Nouveau* / *Corrigé* /
+  *Modifié*, avec lien vers ce fichier.
+- Après une mise à jour, un point d'accent signale les versions non encore
+  consultées ; il disparaît à l'ouverture de la fenêtre.
+- Le contenu vit dans `cpm/changelog.py` (embarqué dans l'exécutable, donc
+  lisible hors ligne). Un test refuse toute version publiée sans entrée.
+
 ### Corrections
 - La ligne de détection des bibliothèques (`PIL : ✗`) n'est plus comptée comme
   une erreur dans le journal ni dans le compteur d'alertes.

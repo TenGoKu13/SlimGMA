@@ -37,6 +37,10 @@ latérale à quatre pages, un bandeau d'étapes et une barre d'action fixe :
 - **Avancé** — sons, archive, sécurité, taille cible, compatibilité GMA
 - **Journal** — trace filtrable, avec compteur d'avertissements dans le menu
 
+L'en-tête donne accès au thème, à la langue, à « À propos » et à la fenêtre
+**✨ Nouveautés**, qui liste les changements de chaque version et signale d'un
+point ceux que vous n'avez pas encore lus.
+
 Le bandeau d'étapes 1→7, la progression, le chronomètre et les boutons
 d'action restent visibles depuis n'importe quelle page.
 
@@ -75,6 +79,7 @@ d'action restent visibles depuis n'importe quelle page.
 | **Thème clair / sombre** | Bascule depuis l'en-tête de la GUI |
 | **Multilingue FR / EN** | Bascule la langue de l'interface et des messages |
 | **Récapitulatif de fin** | Barres avant/après, durée, accès direct au dossier et au rapport HTML |
+| **Nouveautés intégrées** | Fenêtre « ✨ Nouveautés » listant les changements de chaque version (FR/EN), signalées après une mise à jour |
 | **Tolérance aux fichiers corrompus** | Une texture illisible est ignorée avec un avertissement, sans interrompre la compression |
 
 ### Formats supportés
@@ -172,6 +177,7 @@ cpm/
 ├── deps.py         Dépendances optionnelles (Pillow, vtflib, ffmpeg)
 ├── constants.py    Constantes globales
 ├── i18n.py         Traductions FR / EN
+├── changelog.py    Nouveautés affichées dans l'application
 ├── gma.py          Lecteur / écrivain .gma
 ├── analysis.py     Moteur d'analyse (pur, testable)
 ├── report.py       Rapport HTML

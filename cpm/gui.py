@@ -27,6 +27,7 @@ from .constants import (
     TEXTURE_EXTENSIONS, SOUND_EXTENSIONS,
 )
 from .i18n import t
+from .changelog import RELEASES, releases_since
 from .compressor import Compressor
 
 
@@ -52,6 +53,7 @@ UI_PUMP_MS = 40
 SIDEBAR_WIDTH = 186
 PAGES = ('source', 'options', 'advanced', 'log')
 PAGE_ICONS = {'source': '📦', 'options': '⚙', 'advanced': '🛠', 'log': '📜'}
+ENTRY_TONES = {'new': 'GREEN', 'fix': 'RED', 'change': 'ACCENT'}
 
 
 class Tooltip:
@@ -187,6 +189,9 @@ class App:
         self.root.minsize(880, 620)
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
+        self._seen_version = saved.get('seen_version',
+                                       '0.0.0' if saved else VERSION)
+        self._extra_scrolls: dict = {}
         self._ui_queue: queue.SimpleQueue = queue.SimpleQueue()
         self._pump_job = None
         self._compressor: Compressor | None = None
@@ -385,12 +390,16 @@ class App:
         self.lang_btn = self._header_button(
             actions, "EN" if self.lang == 'fr' else "FR", self._toggle_language)
         self._header_button(actions, self.t('btn_about'), self._show_about)
+        self.changelog_btn = self._header_button(
+            actions, self.t('btn_changelog'), self._show_changelog)
+        self._paint_changelog_button()
 
     def _header_button(self, parent, text: str, command):
         btn = tk.Label(parent, text=text, bg=self.SIDEBAR, fg=self.SUB,
                        font=('Segoe UI', 9), padx=11, pady=5, cursor='hand2')
         btn.pack(side='right', padx=3)
         btn._enabled = True
+        btn._idle_fg = self.SUB
 
         def on_click(_event=None):
             if btn._enabled:
@@ -399,7 +408,8 @@ class App:
         btn.bind('<Button-1>', on_click)
         btn.bind('<Enter>', lambda e: btn._enabled and btn.configure(
             bg=self.HOVER, fg=self.FG))
-        btn.bind('<Leave>', lambda e: btn.configure(bg=self.SIDEBAR, fg=self.SUB))
+        btn.bind('<Leave>', lambda e: btn.configure(bg=self.SIDEBAR,
+                                                    fg=btn._idle_fg))
         return btn
 
     @staticmethod
@@ -994,7 +1004,15 @@ class App:
         self.root.bind_all('<Button-5>', self._on_wheel)
 
     def _on_wheel(self, event):
-        area = self.scrolls.get(self._page)
+        widget = getattr(event, 'widget', None)
+        try:
+            top = widget.winfo_toplevel() if widget else None
+        except (AttributeError, tk.TclError):
+            top = None
+        if top is not None and top is not self.root:
+            area = self._extra_scrolls.get(top)
+        else:
+            area = self.scrolls.get(self._page)
         if area is None:
             return
         num = getattr(event, 'num', None)
@@ -1427,11 +1445,110 @@ class App:
             anchor='e', pady=(18, 0))
         self._center_dialog(win)
 
-    def _open_repo(self):
+    def _has_unseen_release(self) -> bool:
+        return bool(releases_since(self._seen_version))
+
+    def _paint_changelog_button(self):
+        unseen = self._has_unseen_release()
+        label = self.t('btn_changelog') + (" •" if unseen else "")
+        self.changelog_btn._idle_fg = self.ACCENT if unseen else self.SUB
+        self.changelog_btn.configure(text=label,
+                                     fg=self.changelog_btn._idle_fg)
+
+    def _show_changelog(self):
+        unseen = {r['version'] for r in releases_since(self._seen_version)}
+        self._seen_version = VERSION
+        self._paint_changelog_button()
+
+        win = tk.Toplevel(self.root)
+        win.title(self.t('changelog_title'))
+        win.configure(bg=self.BG)
+        win.transient(self.root)
+        win.geometry("640x580")
+        win.minsize(480, 360)
+
+        head = tk.Frame(win, bg=self.SIDEBAR, padx=22, pady=14)
+        head.pack(fill='x')
+        tk.Label(head, text=self.t('changelog_title'), bg=self.SIDEBAR,
+                 fg=self.FG, font=('Segoe UI', 15, 'bold')).pack(anchor='w')
+        tk.Label(head, text=self.t('changelog_sub'), bg=self.SIDEBAR,
+                 fg=self.SUB, font=('Segoe UI', 9)).pack(anchor='w')
+        tk.Frame(win, bg=self.BORDER, height=1).pack(fill='x')
+
+        area = ScrollArea(win, self.BG)
+        area.outer.pack(fill='both', expand=True, padx=(20, 6), pady=14)
+        self._extra_scrolls[win] = area
+
+        for release in RELEASES:
+            self._render_release(area.inner, release,
+                                 release['version'] in unseen)
+
+        tk.Frame(win, bg=self.BORDER, height=1).pack(fill='x')
+        footer = tk.Frame(win, bg=self.SIDEBAR, padx=20, pady=12)
+        footer.pack(fill='x')
+        link = tk.Label(footer, text=self.t('changelog_full'), bg=self.SIDEBAR,
+                        fg=self.ACCENT, font=('Segoe UI', 9, 'underline'),
+                        cursor='hand2')
+        link.pack(side='left')
+        link.bind('<Button-1>',
+                  lambda e: self._open_url(REPO_URL + '/blob/main/CHANGELOG.md'))
+        ttk.Button(footer, text=self.t('summary_close'),
+                   command=win.destroy).pack(side='right')
+
+        def on_destroy(event):
+            if event.widget is win:
+                self._extra_scrolls.pop(win, None)
+
+        win.bind('<Destroy>', on_destroy)
+        win.update_idletasks()
+        x = self.root.winfo_rootx() + (self.root.winfo_width() - win.winfo_width()) // 2
+        y = self.root.winfo_rooty() + (self.root.winfo_height() - win.winfo_height()) // 2
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+    def _render_release(self, parent, release: dict, highlight: bool):
+        block = tk.Frame(parent, bg=self.BG)
+        block.pack(fill='x', pady=(0, 18))
+
+        title = tk.Frame(block, bg=self.BG)
+        title.pack(fill='x', pady=(0, 8))
+        tk.Label(title, text=f"v{release['version']}", bg=self.BG,
+                 fg=self.FG, font=('Segoe UI', 12, 'bold')).pack(side='left')
+        if release['date']:
+            tk.Label(title, text=release['date'], bg=self.BG, fg=self.SUB,
+                     font=('Segoe UI', 8)).pack(side='left', padx=(9, 0))
+        if release['version'] == VERSION:
+            self._pill(title, self.t('changelog_current'), self.ACCENT)
+        elif highlight:
+            self._pill(title, self.t('changelog_unseen'), self.GREEN)
+
+        for kind, text in release['entries']:
+            row = tk.Frame(block, bg=self.BG)
+            row.pack(fill='x', pady=2)
+            tone = getattr(self, ENTRY_TONES.get(kind, 'SUB'))
+            tk.Label(row, text=self.t('changelog_' + kind), bg=tone,
+                     fg=self.ON_ACCENT, font=('Segoe UI', 7, 'bold'),
+                     padx=6, pady=2, width=9).pack(side='left', anchor='n')
+            body = tk.Label(row, text=text.get(self.lang, text['fr']),
+                            bg=self.BG, fg=self.FG, font=('Segoe UI', 9),
+                            justify='left', anchor='w', wraplength=470)
+            body.pack(side='left', fill='x', expand=True, padx=(10, 0))
+            row.bind('<Configure>',
+                     lambda e, lbl=body: lbl.configure(
+                         wraplength=max(200, e.width - 100)))
+
+    def _pill(self, parent, text: str, tone: str):
+        tk.Label(parent, text=text, bg=tone, fg=self.ON_ACCENT,
+                 font=('Segoe UI', 7, 'bold'), padx=7,
+                 pady=1).pack(side='left', padx=(9, 0))
+
+    def _open_url(self, url: str):
         try:
-            webbrowser.open(REPO_URL)
+            webbrowser.open(url)
         except Exception:
             pass
+
+    def _open_repo(self):
+        self._open_url(REPO_URL)
 
     def _cancel(self):
         if self._compressor:
@@ -1672,6 +1789,7 @@ class App:
             state['lang'] = self.lang
             state['theme_name'] = self.theme_name
             state['recent_sources'] = self._recent
+            state['seen_version'] = self._seen_version
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             CONFIG_PATH.write_text(json.dumps(state, indent=2), encoding='utf-8')
         except OSError:
