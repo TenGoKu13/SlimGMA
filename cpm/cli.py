@@ -1,4 +1,3 @@
-"""Point d'entrée ligne de commande."""
 import sys
 
 from .constants import VERSION
@@ -16,7 +15,7 @@ def cli_main():
         epilog="""
 Exemples :
   python compressez_pm.py mon_addon/              sortie/
-  python compressez_pm.py mon_addon.gma           sortie.gma   --no-chands
+  python compressez_pm.py mon_addon.gma           sortie.gma   --keep-chands
   python compressez_pm.py mon_addon/              sortie.zip   --format zip --quality 70 --max-res 512
         """,
     )
@@ -24,8 +23,14 @@ Exemples :
     parser.add_argument('output',   help="Chemin de sortie")
     parser.add_argument('--format', choices=['folder', 'gma', 'zip'], default='folder',
                         dest='output_format', help="Format de sortie (défaut : folder)")
-    parser.add_argument('--no-chands',   action='store_true', help="Supprimer les C-Hands")
-    parser.add_argument('--no-unused',   action='store_true', help="Supprimer les fichiers inutiles")
+    parser.add_argument('--keep-chands', action='store_true',
+                        help="Conserver les C-Hands (supprimés par défaut)")
+    parser.add_argument('--keep-unused', action='store_true',
+                        help="Conserver les fichiers inutiles (supprimés par défaut)")
+    parser.add_argument('--no-chands', action='store_true',
+                        help="Déprécié : la suppression des C-Hands est le défaut")
+    parser.add_argument('--no-unused', action='store_true',
+                        help="Déprécié : la suppression des fichiers inutiles est le défaut")
     parser.add_argument('--no-textures', action='store_true', help="Ne pas optimiser les textures")
     parser.add_argument('--quality',   type=int, default=85, metavar='10-100',
                         help="Qualité des textures (défaut : 85)")
@@ -40,8 +45,6 @@ Exemples :
     parser.add_argument('--zip-level', type=int, default=6,
                         choices=range(1, 10), metavar='1-9',
                         help="Niveau de compression ZIP (défaut : 6)")
-    parser.add_argument('--gen-lua', action='store_true', default=True,
-                        help="Générer/mettre à jour le fichier Lua PM (défaut : activé)")
     parser.add_argument('--no-lua', action='store_true',
                         help="Ne pas générer de fichier Lua")
     parser.add_argument('--no-lua-chands', action='store_true',
@@ -71,20 +74,23 @@ Exemples :
                         help="Ne pas recompresser les .vtf non compressés en DXT")
     parser.add_argument('--no-addon-json', action='store_true',
                         help="Ne pas générer addon.json s'il manque (sortie dossier)")
-    parser.add_argument('--no-report', action='store_true',
-                        help="Ne pas générer le rapport HTML d'analyse")
     parser.add_argument('--lang', choices=['fr', 'en'], default='fr',
                         help="Langue des messages (défaut : fr)")
 
     args = parser.parse_args()
+
+    for flag, alt in (('no_chands', '--keep-chands'), ('no_unused', '--keep-unused')):
+        if getattr(args, flag):
+            print(t('cli_deprecated', args.lang,
+                    flag='--' + flag.replace('_', '-'), alt=alt))
 
     opts = {
         'source':            args.source,
         'output':            args.output,
         'source_type':       'gma' if args.source.endswith('.gma') else 'folder',
         'output_format':     args.output_format,
-        'remove_chands':     args.no_chands,
-        'remove_unused':     args.no_unused,
+        'remove_chands':     not args.keep_chands,
+        'remove_unused':     not args.keep_unused,
         'compress_textures': not args.no_textures,
         'max_resolution':    args.max_res,
         'texture_quality':   args.quality,
@@ -99,7 +105,6 @@ Exemples :
         'strip_non_whitelisted': args.strip_non_whitelisted,
         'convert_uncompressed': not args.no_convert_uncompressed,
         'gen_addon_json':    not args.no_addon_json,
-        'gen_report':        not args.no_report,
         'target_size_mb':    args.target_size,
         'dry_run':           args.dry_run,
         'backup_original':   args.backup,

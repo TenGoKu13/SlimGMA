@@ -1,3 +1,2 @@
-# Dépendances de développement (tests). Non nécessaires à l'exécution.
 -r requirements.txt
 pytest>=7.0.0

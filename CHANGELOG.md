@@ -1,5 +1,120 @@
 # Changelog
 
+## 1.2.0 — 2026-08-12
+
+### Refonte complète de l'affichage
+- **Navigation latérale** : les onglets empilés laissent place à une barre
+  latérale à cinq pages (Source, Options, Avancé, Journal, Rapport). Chaque page
+  a son titre, son sous-titre et défile indépendamment si la fenêtre est petite.
+- **Barre d'action permanente** : progression, pourcentage, statut,
+  chronomètre, fichier courant et boutons Compresser / Annuler / Ouvrir le
+  dossier / Ouvrir le rapport restent visibles depuis n'importe quelle page.
+- **Bandeau d'étapes** : les 7 étapes du pipeline sont dessinées en pastilles
+  numérotées reliées entre elles, cochées au fur et à mesure.
+- **Mise en page en cartes** : options regroupées en cartes bordées de largeur
+  égale, au lieu d'une colonne unique de cases à cocher.
+- **Palette redessinée** : nouveaux thèmes sombre et clair, contraste renforcé,
+  boutons, champs, curseurs, ascenseurs et info-bulles entièrement stylés.
+- **Zone de dépôt agrandie** avec aperçu du nom de l'addon et de sa
+  composition.
+- **Compteur d'alertes** : le nombre d'avertissements ou d'erreurs s'affiche
+  directement sur l'entrée « Journal » de la barre latérale.
+- **Filtres de journal en segments** cliquables et fenêtre « À propos »
+  redessinée, avec lien vers le dépôt.
+- La page active est mémorisée entre deux lancements.
+
+### Rapport d'analyse dans l'application
+- **Le rapport HTML est supprimé.** Il fallait quitter l'app, retrouver un
+  fichier sur le disque et l'ouvrir dans un navigateur pour lire l'analyse.
+- **Nouvelle page « Rapport »** dans la barre latérale : synthèse (taille
+  d'origine, taille finale, réduction, nombre de fichiers), rôles des textures
+  en listes dépliables, fichiers inutilisés, doublons exacts et audit qualité.
+- Bouton **Copier le rapport** : version texte prête à coller dans un ticket
+  ou sur Discord.
+- Le rapport suit le changement de langue (les libellés sont traduits à
+  l'affichage, plus au moment de la compression).
+- L'option « Générer un rapport HTML » et le drapeau CLI `--no-report`
+  disparaissent : le rapport est désormais gratuit et toujours disponible.
+  `cpm/report.py` est supprimé.
+
+### Nouveautés dans l'application
+- **Fenêtre « ✨ Nouveautés »** accessible depuis l'en-tête : les changements de
+  chaque version y sont listés en FR/EN, étiquetés *Nouveau* / *Corrigé* /
+  *Modifié*, avec lien vers ce fichier.
+- Après une mise à jour, un point d'accent signale les versions non encore
+  consultées ; il disparaît à l'ouverture de la fenêtre.
+- Le contenu vit dans `cpm/changelog.py` (embarqué dans l'exécutable, donc
+  lisible hors ligne). Un test refuse toute version publiée sans entrée.
+
+### Textures .vtf : la recompression DXT fonctionne enfin
+- **La dépendance `vtflib` n'existait pas sur PyPI.** `pip install vtflib`
+  échoue — donc `VTFLIB_AVAILABLE` était toujours faux, l'option
+  « Recompresser les textures en DXT » ne faisait **rien**, et les `.vtf`
+  n'étaient réduits que par troncature de mipmaps.
+- Remplacée par **`srctools`**, qui lit et écrit réellement le format VTF (DXT
+  compilé, aucune DLL externe). Ajoutée à `requirements.txt`, à `pyproject.toml`
+  et à l'exécutable Windows.
+- Nouveau module `cpm/vtf.py` : rééchantillonnage bilinéaire par halvings
+  successifs, régénération de la chaîne de mipmaps, et conversion vers **DXT1
+  ou DXT5 selon la transparence réellement utilisée** (une texture opaque ne
+  part plus en DXT5, deux fois trop lourd).
+- Cubemaps, textures multi-frames et fichiers illisibles sont laissés
+  intacts. La troncature de mipmaps reste le repli si `srctools` est absent.
+- Mesuré sur un addon de test de 26,7 Mo : **1,7 Mo en sortie (-93,6 %)**.
+
+### Mode batch
+- **Un batch réussi s'affichait comme un échec** : `_run_batch()` ne
+  renseignait ni `final_size`, ni `reduction`, ni le rapport, si bien que la
+  GUI montrait une pastille rouge, aucun récapitulatif et les boutons de fin
+  désactivés — alors que les addons étaient bien compressés.
+- Les totaux sont désormais agrégés et le rapport liste chaque addon traité
+  avec sa taille finale et son gain.
+
+### Ligne de commande
+- **`--no-chands` et `--no-unused` faisaient l'inverse de leur nom** : ils
+  *activaient* la suppression. La CLI ne supprimait donc rien par défaut, là où
+  la GUI supprimait les deux — même addon, deux résultats.
+- Les défauts s'alignent sur la GUI : C-Hands et fichiers inutiles sont
+  supprimés par défaut. **`--keep-chands` et `--keep-unused`** désactivent.
+- Les anciens drapeaux restent acceptés et affichent un avertissement de
+  dépréciation. Un script qui utilisait `--no-chands` obtient le même résultat
+  qu'avant ; un script qui ne l'utilisait **pas** verra désormais les C-Hands
+  supprimés.
+- `--gen-lua` supprimé : `store_true` avec `default=True`, il ne pouvait rien
+  faire et doublonnait `--no-lua`.
+
+### Tests de l'interface
+- La GUI (~2 000 lignes) n'était couverte par **aucun test**. Ajout de
+  `tests/test_gui.py` : construction des cinq pages, bascule thème/langue avec
+  conservation de l'état, profils, compression complète, mode batch, rapport,
+  changelog. Ils se sautent sans serveur X et tournent sous `xvfb-run` en CI.
+- Ajout de `tests/test_vtf.py` pour le pipeline VTF.
+- Suite : 29 → 57 tests.
+
+### Corrections
+- Le récapitulatif de fin en mode aperçu utilise la fenêtre redessinée au lieu
+  d'une boîte de dialogue système.
+- La ligne de détection des bibliothèques (`PIL : ✗`) n'est plus comptée comme
+  une erreur dans le journal ni dans le compteur d'alertes.
+- Le filtre du journal et l'état des étapes survivent au changement de thème ou
+  de langue.
+- L'ascenseur du journal suit désormais le thème au lieu de rester clair.
+
+### Ouverture du code
+- Ajout du fichier **LICENSE** (MIT) — la licence était annoncée dans le README
+  sans jamais être présente dans le dépôt.
+- Ajout de **CONTRIBUTING.md**, des modèles d'issue et de pull request.
+- Ajout de **pyproject.toml** (métadonnées, extras, point d'entrée
+  `compressez-pm`).
+
+### Style du dépôt
+- **Tous les commentaires et docstrings ont été retirés** du code Python
+  (~280 lignes) : seuls les noms et les clés de traduction portent
+  l'explication. Le shebang est conservé.
+- Ajout de `tools/check_no_comments.py`, exécuté par la CI avant les tests pour
+  empêcher toute réintroduction.
+- Le fichier Lua généré ne contient plus d'en-tête de commentaires.
+
 ## 1.1.0 — 2026-07-17
 
 ### Corrections critiques

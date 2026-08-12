@@ -1,4 +1,3 @@
-"""Logique de compression principale."""
 import os
 import struct
 import json
@@ -12,8 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .deps import (
-    PIL_AVAILABLE, Image, VTFLIB_AVAILABLE, vtflib, FFMPEG_AVAILABLE,
-    run_hidden,
+    PIL_AVAILABLE, Image, SRCTOOLS_AVAILABLE, FFMPEG_AVAILABLE, run_hidden,
 )
 from .constants import (
     VERSION, CONFIG_PATH, CHAND_PATTERNS, USELESS_EXTENSIONS,
@@ -22,18 +20,16 @@ from .constants import (
 )
 from .i18n import t
 from .gma import GMAFile
+from . import vtf as vtf_tools
 from .analysis import (
     norm_key, resolve_material_ref, parse_vmt_refs, parse_mdl_materials,
     read_vtf_info, build_dependency_graph, find_duplicate_textures,
     audit_textures, VTF_UNCOMPRESSED_FORMATS, check_gma_whitelist,
     dedup_textures,
 )
-from .report import build_html_report
 
 
 class Compressor:
-    """Logique de compression principale"""
-
     TOTAL_STEPS = 7
 
     def __init__(self, opts: dict, log_fn, progress_fn, status_fn,
@@ -49,7 +45,7 @@ class Compressor:
         self.final_size: int | None = None
         self.reduction: float | None = None
         self.analysis: dict = {}
-        self.report_path: str | None = None
+        self.report: dict = {}
         self._tex_cache: dict = {}
         self.lang        = opts.get('lang', 'fr')
 
@@ -85,7 +81,6 @@ class Compressor:
                 self.log(self.t('dry_run_active'))
                 self.log("")
 
-            # ── Étape 1 : C-Hands ──────────────────────────────────────────
             self.set_step(1)
             self.log(self.t('step_chands', n=1, total=T))
             if self.opts.get('remove_chands') and not self.cancel_flag.is_set():
@@ -96,7 +91,6 @@ class Compressor:
                 self.log(self.t('disabled'))
             self.set_progress(15)
 
-            # ── Étape 2 : Fichiers inutiles ────────────────────────────────
             self.set_step(2)
             self.log(self.t('step_unused', n=2, total=T))
             if self.opts.get('remove_unused') and not self.cancel_flag.is_set():
@@ -107,7 +101,6 @@ class Compressor:
                 self.log(self.t('disabled'))
             self.set_progress(25)
 
-            # ── Étape 3 : Vérification des matériaux ───────────────────────
             self.set_step(3)
             self.log(self.t('step_materials', n=3, total=T))
             if self.opts.get('check_materials', True) and not self.cancel_flag.is_set():
@@ -118,7 +111,6 @@ class Compressor:
                 self.log(self.t('disabled'))
             self.set_progress(30)
 
-            # ── Étape 4 : Textures ─────────────────────────────────────────
             self.set_step(4)
             self.log(self.t('step_textures', n=4, total=T))
             if self.opts.get('compress_textures') and not self.cancel_flag.is_set():
@@ -135,7 +127,6 @@ class Compressor:
                 self.log(self.t('disabled'))
             self.set_progress(60)
 
-            # ── Étape 5 : Sons ─────────────────────────────────────────────
             self.set_step(5)
             self.log(self.t('step_sounds', n=5, total=T))
             if self.opts.get('compress_sounds') and not self.cancel_flag.is_set():
@@ -148,7 +139,6 @@ class Compressor:
                 self.log(self.t('disabled'))
             self.set_progress(75)
 
-            # ── Étape 6 : Lua PM ───────────────────────────────────────────
             self.set_step(6)
             self.log(self.t('step_lua', n=6, total=T))
             if self.opts.get('gen_lua') and not self.cancel_flag.is_set():
@@ -158,7 +148,6 @@ class Compressor:
                 self.log(self.t('disabled'))
             self.set_progress(85)
 
-            # ── Étape 7 : Écriture ─────────────────────────────────────────
             self.set_step(7)
             self.log(self.t('step_write', n=7, total=T))
             if not self.cancel_flag.is_set():
@@ -174,11 +163,10 @@ class Compressor:
                 reduction  = (1 - final_size / original_size) * 100 if original_size > 0 else 0
                 self.final_size = final_size
                 self.reduction  = reduction
+                self.report     = self.build_report(files, src.stem)
                 self.log("")
                 self.log(self.t('final_size', size=self._fmt_size(final_size)))
                 self.log(self.t('final_reduction', pct=f"{reduction:.1f}"))
-                if self.opts.get('gen_report', True):
-                    self._write_html_report(files, src)
                 self.log(self.t('success'))
                 self.set_status(self.t('status_done'))
             else:
@@ -190,8 +178,6 @@ class Compressor:
             self.log(self.t('error_generic', e=e))
             self.log(traceback.format_exc())
             self.set_status(self.t('status_error'))
-
-    # ── Chargement ───────────────────────────────────────────────────────────
 
     def _load_files(self, src: Path) -> dict:
         files = {}
@@ -211,8 +197,6 @@ class Compressor:
                     key = str(fp.relative_to(src)).replace('\\', '/').lower()
                     files[key] = fp.read_bytes()
         return files
-
-    # ── Filtres ───────────────────────────────────────────────────────────────
 
     def _remove_chands(self, files: dict) -> int:
         to_remove = []
@@ -239,8 +223,6 @@ class Compressor:
         for p in to_remove:
             del files[p]
         return len(to_remove)
-
-    # ── Vérification des matériaux ───────────────────────────────────────────
 
     @staticmethod
     def _resolve_vtf_path(ref: str) -> str:
@@ -286,14 +268,9 @@ class Compressor:
         else:
             self.log(self.t('missing_textures_found', n=missing_total))
 
-    # ── Classification / rôles des textures ──────────────────────────────────
-
     @staticmethod
     def _classify_texture_role(path: str) -> str:
-        """Devine le rôle d'une texture d'après son nom de fichier."""
         name = path.lower()
-        # Cartes techniques : prioritaires car elles peuvent contenir un mot-clé
-        # de rôle (ex. head_normal) mais restent avant tout des cartes.
         stem = name.rsplit('/', 1)[-1]
         stem = stem.rsplit('.', 1)[0]
         if stem.endswith(NORMALMAP_HINTS):
@@ -306,10 +283,6 @@ class Compressor:
         return 'role_other'
 
     def _analyze_texture_usage(self, files: dict) -> None:
-        """Analyse complète : rôles, orphelins (.vtf/.vmt), doublons et audit.
-
-        Remplit self.analysis (consommé par le rapport HTML) et applique les
-        suppressions si l'option remove_unused_textures est active."""
         tex_files = {k: v for k, v in files.items()
                      if k != '__meta__' and Path(k).suffix.lower() in TEXTURE_EXTENSIONS}
         if not tex_files:
@@ -317,7 +290,6 @@ class Compressor:
             self.analysis = {}
             return
 
-        # ── 1) Classement par rôle ──
         by_role: dict[str, list[str]] = {}
         for path in sorted(tex_files):
             by_role.setdefault(self._classify_texture_role(path), []).append(path)
@@ -336,7 +308,6 @@ class Compressor:
         remove = self.opts.get('remove_unused_textures', False)
         graph = build_dependency_graph(files)
 
-        # ── 2) Textures .vtf inutilisées ──
         if not any(k.endswith('.vmt') for k in files):
             self.log(self.t('unused_tex_no_vmt'))
             orphan_vtf = []
@@ -360,7 +331,6 @@ class Compressor:
                     self.log(self.t('unused_tex_found', n=len(orphan_vtf),
                                      size=self._fmt_size(size_total)))
 
-        # ── 3) Matériaux .vmt orphelins (non référencés par un .mdl) ──
         orphan_vmt = graph['orphan_vmt']
         if orphan_vmt:
             size_total = sum(len(files[k]) for k in orphan_vmt if k in files)
@@ -380,7 +350,6 @@ class Compressor:
                 self.log(self.t('orphan_vmt_found', n=len(orphan_vmt),
                                  size=self._fmt_size(size_total)))
 
-        # ── 4) Doublons exacts ──
         duplicates = find_duplicate_textures(files)
         dedup_result: dict = {}
         if not duplicates:
@@ -409,7 +378,6 @@ class Compressor:
                 self.log(self.t('dup_summary', groups=len(duplicates),
                                  size=self._fmt_size(recoverable)))
 
-        # ── 5) Audit qualité ──
         max_res_str = self.opts.get('max_resolution', '1024')
         max_res = int(max_res_str) if str(max_res_str).isdigit() else None
         issues = audit_textures(files, max_res)
@@ -421,7 +389,6 @@ class Compressor:
                 self.log(self.t(it['issue'], path=it['path'], detail=it['detail']))
             self.log(self.t('audit_summary', n=len(issues)))
 
-        # Résultats structurés pour le rapport HTML.
         self.analysis = {
             'roles': {r: list(by_role.get(r, [])) for r in role_order if by_role.get(r)},
             'orphan_vtf': list(orphan_vtf),
@@ -432,73 +399,28 @@ class Compressor:
             'removed': remove,
         }
 
-    # ── Rapport HTML ──────────────────────────────────────────────────────────
+    def reduction_label(self) -> str:
+        if self.reduction is None:
+            return '—'
+        return f"{'-' if self.reduction >= 0 else '+'}{abs(self.reduction):.1f}%"
 
-    def _build_report_dict(self, files: dict, addon_name: str) -> dict:
+    def build_report(self, files: dict, addon_name: str) -> dict:
         a = self.analysis or {}
-        audit_lbl = {
-            'audit_oversized':    self.t('report_audit_oversized'),
-            'audit_uncompressed': self.t('report_audit_uncompressed'),
-            'audit_npot':         self.t('report_audit_npot'),
-        }
-        roles = [(self.t(role), items) for role, items in a.get('roles', {}).items()]
-        orphans = list(a.get('orphan_vtf', [])) + list(a.get('orphan_vmt', []))
-        audit = [{'path': it['path'], 'label': audit_lbl.get(it['issue'], it['issue']),
-                  'detail': it['detail']} for it in a.get('audit', [])]
-
-        reduction = f"-{self.reduction:.1f}%" if self.reduction is not None else '—'
         return {
-            'title': self.t('report_title', name=addon_name),
-            'subtitle': self.t('report_subtitle'),
+            'addon': addon_name,
             'removed': a.get('removed', False),
             'summary': {
                 'original': self._fmt_size(self.original_size or 0),
                 'final': self._fmt_size(self.final_size or 0),
-                'reduction': reduction,
+                'reduction': self.reduction_label(),
                 'files': str(sum(1 for k in files if k != '__meta__')),
             },
-            'roles': roles,
-            'orphans': orphans,
-            'duplicates': a.get('duplicates', []),
-            'audit': audit,
-            'labels': {
-                'original': self.t('report_sum_original'),
-                'final': self.t('report_sum_final'),
-                'saved': self.t('report_sum_saved'),
-                'files': self.t('report_sum_files'),
-                'sec_roles': self.t('report_sec_roles'),
-                'sec_orphans': self.t('report_sec_orphans'),
-                'sec_dups': self.t('report_sec_dups'),
-                'sec_audit': self.t('report_sec_audit'),
-                'col_texture': self.t('report_col_texture'),
-                'col_issue': self.t('report_col_issue'),
-                'col_detail': self.t('report_col_detail'),
-                'removed': self.t('report_removed_badge'),
-                'kept': self.t('report_kept_badge'),
-                'empty': self.t('report_empty'),
-            },
+            'roles': [(role, list(items)) for role, items in a.get('roles', {}).items()],
+            'orphans': list(a.get('orphan_vtf', [])) + list(a.get('orphan_vmt', [])),
+            'duplicates': [list(g) for g in a.get('duplicates', [])],
+            'audit': [{'path': it['path'], 'issue': it['issue'],
+                       'detail': it['detail']} for it in a.get('audit', [])],
         }
-
-    def _write_html_report(self, files: dict, src: Path) -> None:
-        if self.opts.get('dry_run'):
-            return
-        try:
-            out = Path(self.opts['output'])
-            fmt = self.opts.get('output_format', 'folder')
-            if fmt == 'folder':
-                out.mkdir(parents=True, exist_ok=True)
-                report_path = out / 'rapport_compression.html'
-            else:
-                stem = out.stem or 'addon'
-                report_path = out.parent / (stem + '_rapport.html')
-            html = build_html_report(self._build_report_dict(files, src.stem))
-            report_path.write_text(html, encoding='utf-8')
-            self.report_path = str(report_path)
-            self.log(self.t('report_written', path=report_path))
-        except Exception:
-            pass  # le rapport ne doit jamais faire échouer la compression
-
-    # ── Textures ──────────────────────────────────────────────────────────────
 
     def _optimize_textures(self, files: dict, max_res, quality: int, quiet: bool = False) -> None:
         tex_files = {k: v for k, v in files.items()
@@ -514,8 +436,8 @@ class Compressor:
             self.log(self.t('textures_found', n=len(tex_files)))
             if max_res is None:
                 self.log(self.t('no_res_limit'))
-            elif not VTFLIB_AVAILABLE:
-                self.log(self.t('no_vtflib', max_res=max_res))
+            elif not SRCTOOLS_AVAILABLE:
+                self.log(self.t('no_srctools', max_res=max_res))
             if workers > 1 and len(tex_files) > 1:
                 self.log(self.t('textures_parallel', n=workers))
 
@@ -525,11 +447,7 @@ class Compressor:
         done = 0
 
         def process_one(path: str, data: bytes):
-            """Traite une texture (thread worker). Retourne (path, new_data, err)."""
             ext = Path(path).suffix.lower()
-            # Cache mémoire : deux textures identiques (doublons) ou les
-            # multiples passes du mode « taille cible » ne sont traitées qu'une
-            # fois pour un jeu de paramètres donné.
             cache_key = (hash(data), len(data), ext, max_res, quality)
             if cache_key in self._tex_cache:
                 return path, self._tex_cache[cache_key], None
@@ -541,8 +459,6 @@ class Compressor:
                 elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
                     new_data = self._process_image_pil(path, data, ext, max_res, quality)
             except Exception as e:
-                # Un fichier corrompu ou non pris en charge ne doit jamais
-                # interrompre toute la compression : on le conserve tel quel.
                 new_data = None
                 err = e
             self._tex_cache[cache_key] = new_data
@@ -576,8 +492,6 @@ class Compressor:
             self.log(self.t('textures_reduced', reduced=reduced, total=total))
             if unchanged_vtf:
                 self.log(self.t('vtf_unchanged', n=unchanged_vtf))
-
-    # ── Mode taille cible ────────────────────────────────────────────────────
 
     def _target_size_steps(self) -> list[tuple[int | None, int]]:
         max_res_str = self.opts.get('max_resolution', '1024')
@@ -630,63 +544,17 @@ class Compressor:
             self.log(self.t('target_not_reached', size=self._fmt_size(chosen_size or 0), target=self._fmt_size(target_bytes)))
 
     def _process_vtf(self, path: str, data: bytes, max_res, quality: int) -> bytes:
-        if VTFLIB_AVAILABLE:
+        if SRCTOOLS_AVAILABLE:
             try:
-                return self._process_vtf_vtflib(data, max_res, quality)
+                rebuilt = vtf_tools.optimize(
+                    data, max_res, self.opts.get('convert_uncompressed', True))
+                if rebuilt:
+                    return rebuilt
             except Exception:
                 pass
-        # Sans VTFLib : réduction de résolution par troncature des mipmaps
         return self._process_vtf_mipstrip(data, max_res)
 
-    # VTFLib (DLL) garde un état global (image liée) : ses appels ne doivent
-    # jamais s'exécuter en parallèle depuis plusieurs threads.
-    _vtflib_lock = threading.Lock()
-
-    def _process_vtf_vtflib(self, data: bytes, max_res, quality: int) -> bytes:
-        with self._vtflib_lock:
-            lib = vtflib.VTFLib()
-            lib.image_load_lump(data)
-            w, h = lib.width(), lib.height()
-            if max_res and (w > max_res or h > max_res):
-                new_w = min(w, max_res)
-                new_h = min(h, max_res)
-                lib.image_resize(new_w, new_h)
-
-            # Recompression de format : un .vtf stocké en RGBA8888/BGR888… pèse
-            # 4 à 6× un DXT équivalent, sans différence visible en jeu. On tente la
-            # conversion de façon défensive (l'API vtflib varie selon les versions).
-            if self.opts.get('convert_uncompressed', True):
-                self._try_convert_dxt(lib, data)
-
-            return bytes(lib.image_save_lump())
-
-    @staticmethod
-    def _try_convert_dxt(lib, original: bytes) -> None:
-        """Convertit une texture non compressée vers DXT1/DXT5 si possible.
-
-        Best-effort : toute incompatibilité d'API laisse l'image inchangée."""
-        info = read_vtf_info(original)
-        if not info or info['format_name'] not in VTF_UNCOMPRESSED_FORMATS:
-            return
-        try:
-            fmt_enum = getattr(vtflib, 'VTFImageFormat', None)
-            convert = getattr(lib, 'image_convert', None)
-            if fmt_enum is None or convert is None:
-                return
-            # Alpha présent -> DXT5 (préserve la transparence), sinon DXT1.
-            has_alpha = bool(getattr(lib, 'image_has_alpha', lambda: True)())
-            target_name = 'IMAGE_FORMAT_DXT5' if has_alpha else 'IMAGE_FORMAT_DXT1'
-            target = getattr(fmt_enum, target_name, None)
-            if target is not None:
-                convert(target)
-        except Exception:
-            # On ne compromet jamais la compression pour un échec de conversion.
-            pass
-
     def _process_vtf_mipstrip(self, data: bytes, max_res) -> bytes:
-        """Réduit la résolution d'un VTF en supprimant les mipmaps les plus
-        grands, sans dépendance externe. Ne touche pas aux fichiers dont la
-        structure n'est pas reconnue (cubemaps, multi-frames, etc.)."""
         if max_res is None:
             return data
         try:
@@ -707,11 +575,11 @@ class Compressor:
 
             TEXTUREFLAGS_ENVMAP = 0x4000
             if frames != 1 or (flags & TEXTUREFLAGS_ENVMAP):
-                return data  # cubemaps / multi-frames : trop risqué
+                return data
             if width == 0 or height == 0 or mipmap_count <= 1:
                 return data
             if max(width, height) <= max_res:
-                return data  # déjà sous la limite
+                return data
             if high_fmt not in VTF_FORMAT_SIZES:
                 return data
 
@@ -721,7 +589,6 @@ class Compressor:
             if depth != 1:
                 return data
 
-            # Localiser le début des données haute résolution
             if (ver_maj, ver_min) >= (7, 3):
                 if len(data) < 72:
                     return data
@@ -745,7 +612,6 @@ class Compressor:
             if high_res_offset >= len(data):
                 return data
 
-            # Taille de chaque mip, du plus petit au plus grand (ordre de stockage)
             mip_sizes = []
             for m in range(mipmap_count - 1, -1, -1):
                 mw = max(1, width >> m)
@@ -757,9 +623,8 @@ class Compressor:
 
             total_high_res = len(data) - high_res_offset
             if sum(s for _, _, _, s in mip_sizes) != total_high_res:
-                return data  # structure inattendue : on ne touche pas au fichier
+                return data
 
-            # Trouver le plus grand mip qui respecte max_res
             keep = 0
             target = None
             for m, mw, mh, sz in mip_sizes:
@@ -769,7 +634,7 @@ class Compressor:
                 target = (m, mw, mh, keep)
 
             if target is None or target[0] == 0:
-                return data  # pas de réduction utile
+                return data
 
             new_mip_level, new_w, new_h, new_high_res_size = target
             new_mipmap_count = mipmap_count - new_mip_level
@@ -798,8 +663,6 @@ class Compressor:
                 compress_level = max(0, min(9, int((100 - quality) / 11)))
                 img.save(buf, format='PNG', compress_level=compress_level, optimize=True)
             elif ext == '.tga':
-                # Le moteur Source attend un vrai TGA : on garde le format
-                # (compression RLE sans perte) au lieu d'écrire du PNG déguisé.
                 img.save(buf, format='TGA', compression='tga_rle')
             elif ext == '.bmp':
                 img.save(buf, format='BMP')
@@ -809,15 +672,9 @@ class Compressor:
         except Exception:
             return data
 
-    # ── Sons ─────────────────────────────────────────────────────────────────
-
-    # Arguments d'encodage ffmpeg par extension. On ré-encode toujours dans le
-    # même conteneur : renommer un son casserait les chemins codés en dur dans
-    # les scripts Lua et les .vmt de l'addon.
     _SOUND_ENCODERS = {
         '.mp3': lambda bitrate: ['-c:a', 'libmp3lame', '-b:a', bitrate],
         '.ogg': lambda bitrate: ['-c:a', 'libvorbis', '-b:a', bitrate],
-        # Source lit du PCM : on réduit l'échantillonnage, pas le conteneur.
         '.wav': lambda bitrate: ['-c:a', 'pcm_s16le', '-ar', '22050'],
     }
 
@@ -839,8 +696,6 @@ class Compressor:
             ext = Path(path).suffix.lower()
             encoder = self._SOUND_ENCODERS.get(ext)
             if encoder is None:
-                # .flac/.aiff… : GMod ne les joue pas ; les convertir en les
-                # renommant casserait les références. On les laisse tels quels.
                 self.log(self.t('sound_skipped_format', path=path))
                 continue
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
@@ -868,13 +723,7 @@ class Compressor:
                     except OSError:
                         pass
 
-    # ── Génération Lua ────────────────────────────────────────────────────────
-
     def _generate_lua(self, files: dict, addon_stem: str) -> None:
-        """Génère ou met à jour le fichier Lua d'enregistrement du playermodel."""
-
-        # 1. Trouver les .mdl candidats (hors armes et LOD), de préférence
-        #    dans models/player/ ; sinon n'importe où ailleurs dans models/
         def is_mdl(p):
             return (p.startswith('models/') and p.endswith('.mdl')
                     and not p.startswith('models/weapons/')
@@ -896,14 +745,12 @@ class Compressor:
 
         self.log(self.t('lua_models_found', n=len(pm_models)))
 
-        # 2. Trouver les c_hands encore présents dans les fichiers
         chand_mdls = [
             p for p in files
             if re.match(r'models/weapons/c_.*\.mdl', p, re.IGNORECASE)
         ]
         include_chands = self.opts.get('lua_chands', True) and bool(chand_mdls)
 
-        # 3. Vérifier s'il existe déjà un fichier Lua avec AddValidModel
         existing_path: str | None = None
         for path, data in files.items():
             if not path.endswith('.lua'):
@@ -915,16 +762,8 @@ class Compressor:
             except Exception:
                 pass
 
-        # 4. Construire le contenu Lua.
-        #    AddValidModel enregistre le playermodel, list.Set l'affiche dans le
-        #    menu Sandbox, AddValidHands associe les c_hands : le gamemode de
-        #    base applique ensuite les mains tout seul (TranslatePlayerHands).
         safe_stem = re.sub(r'[^a-z0-9]', '_', addon_stem.lower()).strip('_') or 'pm'
-        lines: list[str] = [
-            '-- Généré automatiquement par Compressez PM GMod',
-            f'-- Addon : {addon_stem}',
-            '',
-        ]
+        lines: list[str] = []
 
         for mdl in pm_models:
             display = Path(mdl).stem.replace('_', ' ').replace('-', ' ').title()
@@ -937,7 +776,6 @@ class Compressor:
             ]
 
             if include_chands:
-                # Chercher le c_hands le plus proche par nom
                 stem = Path(mdl).stem.lower()
                 match = next(
                     (c for c in chand_mdls
@@ -964,10 +802,7 @@ class Compressor:
             files[new_path] = lua_bytes
             self.log(self.t('lua_created', path=new_path))
 
-    # ── Écriture ─────────────────────────────────────────────────────────────
-
     def _check_gma_whitelist(self, files: dict) -> None:
-        """Avertit (ou retire) les fichiers que GMod refuserait dans un .gma."""
         bad = check_gma_whitelist(files)
         if not bad:
             self.log(self.t('whitelist_none'))
@@ -1036,8 +871,6 @@ class Compressor:
             self._backup_existing(output, fmt)
 
         if fmt == 'folder':
-            # addon.json est requis par gmad pour re-packager le dossier : on le
-            # génère s'il manque (métadonnées du .gma source si disponibles).
             if 'addon.json' not in out_files and self.opts.get('gen_addon_json', True):
                 title = (meta or {}).get('name') or src.stem
                 addon_info = {'title': title, 'type': 'model',
@@ -1070,7 +903,6 @@ class Compressor:
                         gma.description = info.get('description', '')
                     except Exception:
                         pass
-            # Le format GMA utilise des forward slashes même sur Windows
             gma.files = out_files
             out_path = self._resolve_output_path(output, fmt)
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1086,8 +918,6 @@ class Compressor:
                 for path, data in out_files.items():
                     zf.writestr(path, data)
             self.log(self.t('write_zip', path=out_path))
-
-    # ── Mode batch ───────────────────────────────────────────────────────────
 
     def _run_batch(self) -> None:
         src = Path(self.opts['source'])
@@ -1141,7 +971,7 @@ class Compressor:
             )
             sub.run()
             if sub.final_size is not None:
-                results.append((name, sub.final_size, sub.reduction or 0.0))
+                results.append(sub)
             self.log("")
 
         self.set_progress(100)
@@ -1149,15 +979,37 @@ class Compressor:
 
         if results:
             self.log(self.t('batch_summary_header'))
-            for name, size, reduction in results:
-                self.log(self.t('batch_summary_line', name=name,
-                                 size=self._fmt_size(size), pct=f"{reduction:.1f}"))
+            for sub in results:
+                self.log(self.t('batch_summary_line',
+                                name=Path(sub.opts['source']).stem,
+                                size=self._fmt_size(sub.final_size),
+                                pct=f"{sub.reduction or 0.0:.1f}"))
             self.log("")
+            self._aggregate_batch(src, results)
 
         self.log(self.t('batch_done', n=len(results)))
         self.set_status(self.t('status_done'))
 
-    # ── Utilitaires ──────────────────────────────────────────────────────────
+    def _aggregate_batch(self, src: Path, results: list) -> None:
+        self.original_size = sum(s.original_size or 0 for s in results)
+        self.final_size = sum(s.final_size or 0 for s in results)
+        self.reduction = ((1 - self.final_size / self.original_size) * 100
+                          if self.original_size else 0.0)
+        self.report = {
+            'addon': src.name,
+            'removed': False,
+            'summary': {
+                'original': self._fmt_size(self.original_size),
+                'final': self._fmt_size(self.final_size),
+                'reduction': self.reduction_label(),
+                'files': str(sum(int(s.report.get('summary', {}).get('files', 0) or 0)
+                                 for s in results)),
+            },
+            'roles': [], 'orphans': [], 'duplicates': [], 'audit': [],
+            'batch': [{'name': Path(s.opts['source']).stem,
+                       'size': self._fmt_size(s.final_size),
+                       'delta': s.reduction_label()} for s in results],
+        }
 
     @staticmethod
     def _fmt_size(n: int) -> str:

@@ -1,14 +1,14 @@
-"""Constantes globales de Compressez PM GMod."""
 import os
 import sys
 from pathlib import Path
 
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
+LICENSE_NAME = "MIT"
+REPO_URL = "https://github.com/TenGoKu13/Compressez-PM-gmod"
 
 
 def _config_path() -> Path:
-    """Chemin du fichier de préférences utilisateur (multiplateforme)."""
     if sys.platform == 'win32':
         base = Path(os.environ.get('APPDATA', Path.home()))
     else:
@@ -18,7 +18,6 @@ def _config_path() -> Path:
 
 CONFIG_PATH = _config_path()
 
-# Patterns de fichiers C-Hands (bras à la première personne)
 CHAND_PATTERNS = [
     r"models/weapons/c_.*",
     r"materials/models/weapons/c_.*",
@@ -27,19 +26,15 @@ CHAND_PATTERNS = [
     r"models/weapons/v_.*_c\..*",
 ]
 
-# Extensions de fichiers inutiles (documentation, sources PSD, etc.)
 USELESS_EXTENSIONS = {
     '.txt', '.md', '.pdf', '.doc', '.docx', '.nfo', '.log',
     '.bat', '.sh', '.psd', '.xcf', '.ai', '.eps',
 }
 
-# Extensions de textures supportées
 TEXTURE_EXTENSIONS = {'.vtf', '.png', '.jpg', '.jpeg', '.tga', '.bmp'}
 
-# Extensions de sons supportées
 SOUND_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.flac', '.aif', '.aiff'}
 
-# Formats d'image VTF : id -> (nom, octets/pixel ou octets/bloc 4x4, bloc compressé ?)
 VTF_FORMAT_SIZES = {
     0:  ('RGBA8888', 4, False),
     1:  ('ABGR8888', 4, False),
@@ -86,7 +81,6 @@ def _vtf_format_size(fmt: int, w: int, h: int) -> int | None:
     return w * h * unit
 
 
-# Clés de matériaux VMT faisant référence à des fichiers .vtf
 VMT_TEXTURE_KEYS = {
     'basetexture', 'basetexture2', 'bumpmap', 'bumpmap2', 'normalmap',
     'normalmap2', 'envmapmask', 'detail', 'blendmodulatetexture',
@@ -95,9 +89,6 @@ VMT_TEXTURE_KEYS = {
     'iris', 'corneatexture', 'displacementmap', 'blendmask',
 }
 
-# Rôle d'une texture déterminé par des mots-clés dans son nom de fichier.
-# L'ordre compte : les rôles les plus spécifiques doivent passer en premier.
-# Clé de rôle -> liste de mots-clés (FR/EN) recherchés dans le chemin.
 TEXTURE_ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ('role_eye_effect', ('eyeglow', 'eyeball', 'glowing_eye', 'eye_glow')),
     ('role_eyes',       ('eye', 'iris', 'cornea', 'oeil', 'yeux', 'pupil')),
@@ -111,12 +102,9 @@ TEXTURE_ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ('role_accessory',  ('accessor', 'bag', 'belt', 'ceinture', 'strap', 'pouch', 'badge', 'patch', 'weapon', 'gun')),
 ]
 
-# Suffixes de nom indiquant une carte technique plutôt qu'un rôle visuel.
 NORMALMAP_HINTS = ('_normal', '_n', '_nrm', '_bump', '_ddn')
 EFFECTMAP_HINTS = ('_phong', '_spec', '_exp', '_gloss', '_ao', '_mask', '_illum', '_detail')
 
-# Whitelist du format GMA : seuls ces motifs sont acceptés par Garry's Mod au
-# montage d'un .gma (source : gmad, AddonWhiteList.h). `*` matche aussi les `/`.
 GMA_WHITELIST = (
     'addon.json',
     'lua/*.lua',
