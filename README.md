@@ -16,7 +16,7 @@ redistribuez-le, y compris commercialement.
 ## Interface
 
 La v1.2 remplace l'ancienne fenêtre à onglets empilés par une navigation
-latérale à quatre pages, un bandeau d'étapes et une barre d'action fixe :
+latérale à cinq pages, un bandeau d'étapes et une barre d'action fixe :
 
 ```
 ┌────────────┬──────────────────────────────────────────────┐
@@ -80,7 +80,7 @@ d'action restent visibles depuis n'importe quelle page.
 | **Info-bulles** | Explication au survol de chaque option (FR/EN) |
 | **Thème clair / sombre** | Bascule depuis l'en-tête de la GUI |
 | **Multilingue FR / EN** | Bascule la langue de l'interface et des messages |
-| **Récapitulatif de fin** | Barres avant/après, durée, accès direct au dossier et au rapport HTML |
+| **Récapitulatif de fin** | Barres avant/après, durée, accès direct au dossier de sortie et à la page Rapport |
 | **Nouveautés intégrées** | Fenêtre « ✨ Nouveautés » listant les changements de chaque version (FR/EN), signalées après une mise à jour |
 | **Tolérance aux fichiers corrompus** | Une texture illisible est ignorée avec un avertissement, sans interrompre la compression |
 
