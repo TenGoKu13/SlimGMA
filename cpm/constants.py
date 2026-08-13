@@ -33,6 +33,8 @@ USELESS_EXTENSIONS = {
 
 TEXTURE_EXTENSIONS = {'.vtf', '.png', '.jpg', '.jpeg', '.tga', '.bmp'}
 
+PIL_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}
+
 SOUND_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.flac', '.aif', '.aiff'}
 
 VTF_FORMAT_SIZES = {

@@ -71,6 +71,11 @@ cpm/
 `analysis.py` et `vtf.py` sont des modules purs, sans dépendance à tkinter :
 c'est là que les nouveaux tests sont les plus faciles à écrire.
 
+## Code de conduite
+
+Le projet suit un [code de conduite](CODE_OF_CONDUCT.md) court : soyez corrects
+les uns envers les autres.
+
 ## Licence des contributions
 
 En proposant une contribution, vous acceptez qu'elle soit distribuée sous la

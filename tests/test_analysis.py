@@ -339,3 +339,15 @@ def test_gui_delta_label():
     assert App._delta_label(0) == '-0.0%'
     assert App._delta_label(-2.7) == '+2.7%'
     assert App._delta_label(None) == '—'
+
+
+def test_target_size_skips_quality_passes_without_pil_images():
+    comp = _dummy_compressor()
+    comp.opts.update({'max_resolution': '1024', 'texture_quality': 85})
+
+    only_vtf = {'materials/a.vtf': b'', 'models/b.mdl': b''}
+    steps = comp._target_size_steps(only_vtf)
+    assert {q for _res, q in steps} == {85}
+
+    with_png = dict(only_vtf, **{'materials/c.png': b''})
+    assert len({q for _res, q in comp._target_size_steps(with_png)}) > 1

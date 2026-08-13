@@ -1,0 +1,79 @@
+name: Publier une version
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag à publier (ex. v1.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: python -m pip install pyinstaller -r requirements.txt
+
+      - name: Construire l'exécutable
+        run: >
+          python -m PyInstaller --onefile --windowed
+          --name "Compressez-PM-GMod"
+          --collect-all tkinterdnd2 --collect-all srctools
+          compressez_pm.py
+
+      - name: Vérifier que l'exécutable démarre
+        run: dist\Compressez-PM-GMod.exe --help
+        shell: cmd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: dist/Compressez-PM-GMod.exe
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: exe
+          path: dist
+
+      - name: Extraire les notes de version
+        id: notes
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          python - "$VERSION" <<'PY' > notes.md
+          import re, sys
+          version = sys.argv[1]
+          text = open('CHANGELOG.md', encoding='utf-8').read()
+          pattern = rf"^## {re.escape(version)}\b.*?$(.*?)(?=^## |\Z)"
+          found = re.search(pattern, text, re.S | re.M)
+          print((found.group(1).strip() if found
+                 else f"Voir CHANGELOG.md pour la version {version}."))
+          PY
+
+      - name: Créer la release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.notes.outputs.tag }}
+          name: Compressez PM GMod ${{ steps.notes.outputs.tag }}
+          body_path: notes.md
+          files: dist/Compressez-PM-GMod.exe
+          draft: false
+          prerelease: false

@@ -37,8 +37,12 @@ RELEASES: list[dict] = [
                 'en': "New light and dark themes, stronger contrast, options grouped into cards.",
             }),
             (CHANGE, {
-                'fr': "Projet passé en logiciel libre : licence MIT, guide de contribution et modèles d'issue publiés.",
-                'en': "The project is now free software: MIT license, contributing guide and issue templates published.",
+                'fr': "Projet passé en logiciel libre : licence MIT, guide de contribution, code de conduite et téléchargement direct de l'exécutable depuis les releases GitHub.",
+                'en': "The project is now free software: MIT license, contributing guide, code of conduct and a direct executable download from the GitHub releases.",
+            }),
+            (CHANGE, {
+                'fr': "Mode taille cible jusqu'à cinq fois plus rapide : les passes de qualité inutiles sur les addons sans images non-VTF ne sont plus tentées.",
+                'en': "Target-size mode up to five times faster: useless quality passes are skipped on addons that only contain .vtf textures.",
             }),
             (FIX, {
                 'fr': "La recompression DXT ne faisait rien : elle dépendait d'une bibliothèque introuvable. Les .vtf sont maintenant vraiment redimensionnés et recompressés (jusqu'à -90 % sur un addon de textures).",

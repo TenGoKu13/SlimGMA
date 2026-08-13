@@ -14,7 +14,7 @@ from .deps import (
     PIL_AVAILABLE, Image, SRCTOOLS_AVAILABLE, FFMPEG_AVAILABLE, run_hidden,
 )
 from .constants import (
-    VERSION, CONFIG_PATH, CHAND_PATTERNS, USELESS_EXTENSIONS,
+    VERSION, CONFIG_PATH, CHAND_PATTERNS, USELESS_EXTENSIONS, PIL_EXTENSIONS,
     TEXTURE_EXTENSIONS, SOUND_EXTENSIONS, VTF_FORMAT_SIZES, _vtf_format_size,
     VMT_TEXTURE_KEYS, TEXTURE_ROLE_KEYWORDS, NORMALMAP_HINTS, EFFECTMAP_HINTS,
 )
@@ -456,7 +456,7 @@ class Compressor:
             try:
                 if ext == '.vtf':
                     new_data = self._process_vtf(path, data, max_res, quality)
-                elif PIL_AVAILABLE and ext in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
+                elif PIL_AVAILABLE and ext in PIL_EXTENSIONS:
                     new_data = self._process_image_pil(path, data, ext, max_res, quality)
             except Exception as e:
                 new_data = None
@@ -493,7 +493,11 @@ class Compressor:
             if unchanged_vtf:
                 self.log(self.t('vtf_unchanged', n=unchanged_vtf))
 
-    def _target_size_steps(self) -> list[tuple[int | None, int]]:
+    def _quality_changes_anything(self, files: dict) -> bool:
+        return any(Path(k).suffix.lower() in PIL_EXTENSIONS
+                   for k in files if k != '__meta__')
+
+    def _target_size_steps(self, files: dict) -> list[tuple[int | None, int]]:
         max_res_str = self.opts.get('max_resolution', '1024')
         quality     = int(self.opts.get('texture_quality', 85))
         base_res    = int(max_res_str) if str(max_res_str).isdigit() else None
@@ -505,7 +509,11 @@ class Compressor:
         if not res_list:
             res_list = [128]
 
-        qual_list = sorted({q for q in (quality, 75, 60, 45, 30) if 10 <= q <= 100}, reverse=True)
+        if self._quality_changes_anything(files):
+            qual_list = sorted({q for q in (quality, 75, 60, 45, 30)
+                                if 10 <= q <= 100}, reverse=True)
+        else:
+            qual_list = [quality]
 
         steps: list[tuple[int | None, int]] = []
         for res in res_list:
@@ -518,7 +526,7 @@ class Compressor:
         target_bytes = int(self.opts['target_size_mb'] * 1024 * 1024)
         self.log(self.t('step_target_size', size=self._fmt_size(target_bytes)))
 
-        steps = self._target_size_steps()
+        steps = self._target_size_steps(original_files)
         chosen = steps[-1]
         chosen_size = None
 
