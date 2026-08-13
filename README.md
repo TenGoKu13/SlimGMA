@@ -2,7 +2,7 @@
 
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Tests & Build](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml/badge.svg)](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![PRs bienvenues](https://img.shields.io/badge/PRs-bienvenues-brightgreen.svg)](CONTRIBUTING.md)
 
 Outil de compression d'addons **Playermodel** pour Garry's Mod.
@@ -29,7 +29,7 @@ latérale à cinq pages, un bandeau d'étapes et une barre d'action fixe :
 │    Rapport │                                              │
 │  ────────  ├──────────────────────────────────────────────┤
 │  Pillow ●  │  ①─②─③─④─⑤─⑥─⑦   Textures                    │
-│  vtflib ●  │  ▬▬▬▬▬▬▬▬▬▬▬ 58%      [⏹ Annuler] [▶ Compresser] │
+│ srctools ● │  ▬▬▬▬▬▬▬▬▬▬▬ 58%      [⏹ Annuler] [▶ Compresser] │
 └────────────┴──────────────────────────────────────────────┘
 ```
 
@@ -100,7 +100,9 @@ pip install -r requirements.txt
 
 > **Optionnel – compression des sons** : installer [ffmpeg](https://ffmpeg.org/download.html) dans le PATH
 >
-> Les textures `.vtf` et le glisser-déposer fonctionnent directement, sans dépendance supplémentaire à installer.
+> `requirements.txt` installe `srctools` (textures `.vtf`), `Pillow` (images) et
+> `tkinterdnd2` (glisser-déposer). Sans elles l'outil démarre quand même, mais
+> l'optimisation des textures est très limitée — voir *Dépendances*.
 
 ---
 

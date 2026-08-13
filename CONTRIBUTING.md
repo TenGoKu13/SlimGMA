@@ -22,6 +22,10 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
+Python 3.10 minimum (le code utilise la syntaxe `X | None`). Les tests
+d'interface ont besoin d'un serveur X : sans écran ils se sautent tout seuls,
+sous Linux lancez-les avec `xvfb-run -a pytest -q`.
+
 1. Créez une branche depuis `main`.
 2. Faites votre modification, avec un test quand c'est possible.
 3. Vérifiez que `python -m pytest -q` passe.
@@ -53,18 +57,18 @@ les clés manquantes.
 ```
 compressez_pm.py   Point d'entrée (CLI + GUI)
 cpm/
-├── deps.py         Dépendances optionnelles (Pillow, vtflib, ffmpeg)
+├── deps.py         Dépendances optionnelles (Pillow, srctools, ffmpeg)
 ├── constants.py    Constantes globales
 ├── i18n.py         Traductions FR / EN
 ├── gma.py          Lecteur / écrivain .gma
+├── vtf.py          Redimensionnement et recompression DXT des .vtf
 ├── analysis.py     Moteur d'analyse (pur, testable)
-├── report.py       Rapport HTML
 ├── compressor.py   Logique de compression
 ├── gui.py          Interface graphique tkinter
 └── cli.py          Point d'entrée ligne de commande
 ```
 
-`analysis.py` et `report.py` sont des modules purs, sans dépendance à tkinter :
+`analysis.py` et `vtf.py` sont des modules purs, sans dépendance à tkinter :
 c'est là que les nouveaux tests sont les plus faciles à écrire.
 
 ## Licence des contributions
