@@ -49,7 +49,7 @@ jobs:
         run: python -m PyInstaller --onefile --windowed --name "Compressez-PM-GMod" --collect-all tkinterdnd2 --collect-all srctools compressez_pm.py
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Compressez-PM-GMod-EXE
           path: dist/Compressez-PM-GMod.exe

@@ -36,7 +36,7 @@ jobs:
         run: dist\Compressez-PM-GMod.exe --help
         shell: cmd
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: exe
           path: dist/Compressez-PM-GMod.exe
