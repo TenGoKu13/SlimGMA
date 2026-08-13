@@ -103,9 +103,26 @@
 ### Ouverture du code
 - Ajout du fichier **LICENSE** (MIT) — la licence était annoncée dans le README
   sans jamais être présente dans le dépôt.
-- Ajout de **CONTRIBUTING.md**, des modèles d'issue et de pull request.
+- Ajout de **CONTRIBUTING.md**, **CODE_OF_CONDUCT.md**, des modèles d'issue et
+  de pull request, et de **dependabot.yml**.
 - Ajout de **pyproject.toml** (métadonnées, extras, point d'entrée
   `compressez-pm`).
+- **Publication automatique des releases** : pousser un tag `v*` construit
+  l'exécutable Windows, vérifie qu'il démarre, extrait les notes de ce fichier
+  et publie le tout en GitHub Release. Avant, l'`.exe` restait un artefact
+  Actions expirant au bout de 90 jours et inaccessible sans compte GitHub.
+- **README refait** pour les moddeurs plutôt que pour les développeurs :
+  captures d'écran, parcours en trois étapes, FAQ, et détails techniques
+  repliés dans une section dépliable.
+- `requires-python` corrigé de `>=3.9` à `>=3.10` (le code utilise `X | None`,
+  évalué à l'import) et CI étendue à 3.10 / 3.11 / 3.12.
+
+### Performance
+- **Mode taille cible 5× plus rapide** sur les addons sans images non-VTF : le
+  curseur de qualité n'affecte que les `.png`/`.jpg`/`.tga`, l'outil essayait
+  malgré tout cinq qualités différentes par résolution — cinq passes de
+  recompression identiques. Les variantes de qualité ne sont plus tentées
+  quand l'addon n'a que des `.vtf`.
 
 ### Style du dépôt
 - **Tous les commentaires et docstrings ont été retirés** du code Python

@@ -1,130 +1,179 @@
-# Compressez PM GMod
+<div align="center">
+
+# 🗜️ Compressez PM GMod
+
+### Votre playermodel pèse 200 Mo ? Il peut peser 20.
+
+Un outil gratuit qui allège vos addons **Playermodel** pour Garry's Mod,
+sans les casser et sans que ça se voie en jeu.
 
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
-[![Tests & Build](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml/badge.svg)](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
-[![PRs bienvenues](https://img.shields.io/badge/PRs-bienvenues-brightgreen.svg)](CONTRIBUTING.md)
+[![Tests](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml/badge.svg)](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml)
+[![Téléchargement](https://img.shields.io/github/v/release/TenGoKu13/Compressez-PM-gmod?label=t%C3%A9l%C3%A9charger&color=success)](https://github.com/TenGoKu13/Compressez-PM-gmod/releases/latest)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-Outil de compression d'addons **Playermodel** pour Garry's Mod.
-Disponible en **interface graphique** (GUI) et en **ligne de commande** (CLI).
+<img src="docs/images/source.png" width="820" alt="La fenêtre principale de Compressez PM GMod">
 
-**Logiciel libre sous licence [MIT](LICENSE)** — utilisez-le, modifiez-le,
-redistribuez-le, y compris commercialement.
+</div>
 
 ---
 
-## Interface
+## À quoi ça sert ?
 
-La v1.2 remplace l'ancienne fenêtre à onglets empilés par une navigation
-latérale à cinq pages, un bandeau d'étapes et une barre d'action fixe :
+Les playermodels du Workshop sont souvent **énormes pour rien** : des textures
+en 2048×2048 qu'on ne distingue pas en jeu, des fichiers stockés sans
+compression, des copies en double, des `.psd` et des `.txt` oubliés dedans.
 
-```
-┌────────────┬──────────────────────────────────────────────┐
-│  🗜 CPM    │  Source                                      │
-│            │  ┌────────────────────────────────────────┐  │
-│  ▸ Source  │  │      Déposez un addon ou un .gma       │  │
-│    Options │  └────────────────────────────────────────┘  │
-│    Avancé  │  Destination : …                             │
-│    Journal │                                              │
-│    Rapport │                                              │
-│  ────────  ├──────────────────────────────────────────────┤
-│  Pillow ●  │  ①─②─③─④─⑤─⑥─⑦   Textures                    │
-│  vtflib ●  │  ▬▬▬▬▬▬▬▬▬▬▬ 58%      [⏹ Annuler] [▶ Compresser] │
-└────────────┴──────────────────────────────────────────────┘
-```
+Cet outil s'occupe de tout ça et vous rend un addon **prêt à publier**.
 
-- **Source** — zone de dépôt, historique, type d'entrée et de sortie
-- **Options** — profils rapides, nettoyage, textures, script Lua
-- **Avancé** — sons, archive, sécurité, taille cible, compatibilité GMA
-- **Journal** — trace filtrable, avec compteur d'avertissements dans le menu
-- **Rapport** — analyse de l'addon après compression, directement dans l'app
+| Avant | Après |
+|---|---|
+| 26,7 Mo | **1,7 Mo** |
 
-L'en-tête donne accès au thème, à la langue, à « À propos » et à la fenêtre
-**✨ Nouveautés**, qui liste les changements de chaque version et signale d'un
-point ceux que vous n'avez pas encore lus.
-
-Le bandeau d'étapes 1→7, la progression, le chronomètre et les boutons
-d'action restent visibles depuis n'importe quelle page.
+*(mesuré sur l'addon de test du projet — le gain dépend de votre addon,
+comptez souvent entre 50 % et 90 %)*
 
 ---
 
-## Fonctionnalités
+## Ça marche comment ?
 
-| Option | Description |
-|--------|-------------|
-| **Supprimer les C-Hands** | Retire les modèles de bras à la 1ʳᵉ personne (`c_arms`, `c_*`) |
-| **Supprimer les fichiers inutiles** | Supprime `.txt`, `.md`, `.pdf`, `.psd`, `.log`, etc. |
-| **Vérification des matériaux** | Détecte les textures référencées par les `.vmt` mais absentes de l'addon |
-| **Rôle des textures** | Classe chaque texture par usage (tête, casque, corps, yeux, mains, cartes normales…) |
-| **Graphe de dépendances** | Lit les `.mdl` pour relier modèles → `.vmt` → `.vtf` et repérer les orphelins |
-| **Supprimer les textures inutilisées** | Repère les `.vtf`/`.vmt` orphelins et peut les supprimer |
-| **Fusion des doublons (dédup)** | Fusionne les textures identiques en une copie unique et réécrit les `.vmt` — sans perte |
-| **Whitelist GMA** | Signale (ou retire) les fichiers que GMod refuserait au montage du `.gma` |
-| **Audit qualité** | Repère les textures surdimensionnées, non compressées ou non puissance de 2 |
-| **Recompression DXT** | Convertit les `.vtf` non compressés en DXT1/DXT5 selon leur transparence réelle — 4 à 8× plus légers |
-| **Rapport intégré** | Page « Rapport » dans l'app : synthèse, rôles des textures, fichiers inutilisés, doublons, audit — copiable en un clic |
-| **Optimiser les textures** | Redimensionne les `.vtf` (rééchantillonnage bilinéaire + régénération des mipmaps) ainsi que `.png`, `.jpg`, `.tga` — en parallèle |
-| **Résolution max des textures** | 256 / 512 / 1024 / 2048 / Aucune limite |
-| **Qualité des textures** | Curseur de 10 % à 100 % |
-| **Taille cible** | Ajuste automatiquement résolution/qualité pour atteindre une taille max donnée |
-| **Compresser les sons** | Ré-encode chaque son dans son format d'origine via ffmpeg (les chemins Lua restent valides) |
-| **`addon.json` automatique** | Généré s'il manque en sortie dossier (requis par gmad) |
-| **Niveau de compression ZIP** | 1 (rapide) à 9 (maximum) |
-| **Mode aperçu (dry-run)** | Affiche les changements sans rien écrire sur le disque |
-| **Sauvegarde de l'original** | Crée une copie horodatée de la sortie avant écrasement |
-| **Mode batch** | Traite plusieurs addons (sous-dossiers/.gma) en une seule fois |
-| **Zone de dépôt** | Déposez un dossier ou un `.gma` (ou cliquez) — composition affichée (textures/sons/modèles) |
-| **Bandeau d'étapes** | Pipeline 1→7 avec état en direct, chronomètre et fichier courant |
-| **Sources récentes** | Historique persistant des derniers addons traités |
-| **Raccourcis clavier** | Ctrl+O source • Ctrl+Entrée compresser • Échap annuler |
-| **Info-bulles** | Explication au survol de chaque option (FR/EN) |
-| **Thème clair / sombre** | Bascule depuis l'en-tête de la GUI |
-| **Multilingue FR / EN** | Bascule la langue de l'interface et des messages |
-| **Récapitulatif de fin** | Barres avant/après, durée, accès direct au dossier de sortie et à la page Rapport |
-| **Nouveautés intégrées** | Fenêtre « ✨ Nouveautés » listant les changements de chaque version (FR/EN), signalées après une mise à jour |
-| **Tolérance aux fichiers corrompus** | Une texture illisible est ignorée avec un avertissement, sans interrompre la compression |
+### En 3 étapes
 
-### Formats supportés
-- **Entrée** : dossier addon ou fichier `.gma`
-- **Sortie** : dossier, fichier `.gma`, ou archive `.zip`
+**1. Déposez votre addon** — un dossier ou un fichier `.gma`, glissé dans la
+fenêtre ou choisi avec *Parcourir*.
+
+**2. Choisissez un profil** — *Équilibré* convient à presque tout le monde.
+Si vous voulez régler vous-même, tout est dans l'onglet *Options*.
+
+**3. Cliquez sur Compresser.** C'est fini.
+
+<div align="center">
+<img src="docs/images/options.png" width="740" alt="L'onglet Options">
+</div>
+
+### Vous voyez ce qui se passe
+
+L'outil ne travaille pas dans votre dos : les 7 étapes défilent en bas de la
+fenêtre, avec le fichier en cours de traitement et le temps écoulé.
+
+<div align="center">
+<img src="docs/images/journal.png" width="740" alt="Le journal détaillé">
+</div>
+
+### Et il vous explique ce qu'il a fait
+
+À la fin, l'onglet **Rapport** vous dit exactement ce qui a été trouvé dans
+votre addon : à quoi sert chaque texture, lesquelles ne servent à rien,
+lesquelles sont en double, et lesquelles posent problème.
+
+<div align="center">
+<img src="docs/images/rapport.png" width="740" alt="Le rapport d'analyse">
+</div>
 
 ---
 
 ## Installation
 
+### La façon simple (Windows)
+
+**[⬇ Télécharger la dernière version](https://github.com/TenGoKu13/Compressez-PM-gmod/releases/latest)**
+
+Un seul fichier `.exe`, rien à installer. Double-cliquez, c'est parti.
+
+### Depuis les sources (Windows, Linux, macOS)
+
 ```bash
 git clone https://github.com/TenGoKu13/Compressez-PM-gmod.git
 cd Compressez-PM-gmod
 pip install -r requirements.txt
-```
-
-> **Optionnel – compression des sons** : installer [ffmpeg](https://ffmpeg.org/download.html) dans le PATH
->
-> Les textures `.vtf` et le glisser-déposer fonctionnent directement, sans dépendance supplémentaire à installer.
-
----
-
-## Utilisation
-
-### Interface graphique (recommandée)
-
-```bash
 python compressez_pm.py
 ```
 
-### Ligne de commande
+Python 3.10 ou plus récent. Pour compresser aussi les **sons**, installez
+[ffmpeg](https://ffmpeg.org/download.html) — sinon tout le reste fonctionne.
+
+---
+
+## Ce que l'outil sait faire
+
+### Alléger
+
+| | |
+|---|---|
+| 🖼️ **Réduire les textures** | Les passe en 1024 px (ou 512, ou ce que vous voulez). Invisible en jeu sur un playermodel. |
+| 📦 **Recompresser en DXT** | Les textures stockées sans compression deviennent 4 à 8× plus légères, sans perte visible. |
+| ⧉ **Fusionner les doublons** | Deux textures identiques ? Il n'en garde qu'une et met les matériaux à jour. Aucune perte. |
+| 🗑️ **Faire le ménage** | Supprime les `.txt`, `.psd`, `.log` et autres fichiers qui n'ont rien à faire dans un addon. |
+| 🔊 **Compresser les sons** | Ré-encode chaque son sans changer son format, donc sans casser vos scripts. |
+| ✋ **Retirer les C-Hands** | Les bras à la première personne, inutiles si votre addon n'est qu'un playermodel. |
+
+### Vérifier
+
+| | |
+|---|---|
+| 🔍 **Textures manquantes** | Repère les textures que vos matériaux réclament mais qui ne sont pas dans l'addon. |
+| 🧹 **Fichiers inutilisés** | Suit les liens modèle → matériau → texture et signale ce qui ne sert à personne. |
+| ✅ **Compatibilité GMod** | Certains fichiers empêchent un `.gma` de se monter. L'outil les signale et peut les retirer. |
+| ⚠️ **Audit qualité** | Textures trop grandes, non compressées, ou dont la taille n'est pas une puissance de 2. |
+
+### Vous simplifier la vie
+
+| | |
+|---|---|
+| 📝 **Script Lua automatique** | Génère le fichier qui enregistre votre playermodel dans le menu du jeu. |
+| 🎯 **Taille cible** | « Je veux moins de 10 Mo » — l'outil trouve les réglages tout seul. |
+| 👀 **Mode aperçu** | Montre ce qu'il ferait, sans rien écrire sur le disque. |
+| 📚 **Mode lot** | Plusieurs addons d'un coup. |
+| 💾 **Sauvegarde** | Copie horodatée avant d'écraser quoi que ce soit. |
+| 🌍 **Français / English** | Toute l'interface, d'un clic. |
+| 🌓 **Thème clair ou sombre** | Au choix. |
+
+<div align="center">
+<img src="docs/images/source_clair.png" width="680" alt="Le thème clair">
+</div>
+
+**Formats acceptés** — en entrée : un dossier d'addon ou un `.gma`.
+En sortie : un dossier, un `.gma` ou un `.zip`.
+
+---
+
+## Questions fréquentes
+
+**Est-ce que ça abîme mon addon ?**
+Non. Les réductions de taille se voient sur le disque, pas en jeu. Et si vous
+avez un doute, le *mode aperçu* vous montre le résultat sans rien modifier, et
+l'option *sauvegarde* garde une copie de l'original.
+
+**Ça marche sur un addon déjà publié sur le Workshop ?**
+Oui : donnez-lui le `.gma`, il vous rend un `.gma` allégé, prêt à réuploader.
+
+**Je ne comprends rien aux options.**
+Laissez le profil *Équilibré* et cliquez sur Compresser. Les réglages avancés
+sont là pour ceux qui en veulent, pas pour vous barrer la route. Chaque option
+affiche une explication quand vous passez la souris dessus.
+
+**Mon addon n'a presque pas maigri.**
+Regardez l'onglet *Rapport* : il vous dira pourquoi. Souvent l'addon était déjà
+bien fait, ou son poids vient des modèles (`.mdl`, `.vvd`) que l'outil ne
+touche pas volontairement — les toucher casserait le modèle.
+
+**Ça envoie mes fichiers quelque part ?**
+Non. Tout se passe sur votre machine, l'outil n'a besoin d'aucune connexion.
+
+---
+
+## Ligne de commande
+
+Pour automatiser, tout est aussi disponible en CLI :
 
 ```bash
 python compressez_pm.py mon_addon/ sortie/
-
-python compressez_pm.py mon_addon.gma sortie.gma --keep-chands --quality 70
-
-python compressez_pm.py mon_addon/ sortie.zip --format zip --max-res 512
-
-python compressez_pm.py mon_addon/ sortie/ --compress-sounds --sound-quality 96k
+python compressez_pm.py mon_addon.gma sortie.gma --max-res 512
+python compressez_pm.py mes_addons/ sorties/ --batch --target-size 10
 ```
 
-#### Toutes les options CLI
+<details>
+<summary><b>Toutes les options CLI</b></summary>
 
 ```
 source output               Chemins source et sortie
@@ -132,57 +181,64 @@ source output               Chemins source et sortie
 --keep-chands               Conserver les C-Hands (supprimés par défaut)
 --keep-unused               Conserver les fichiers inutiles (supprimés par défaut)
 --no-textures               Ne pas optimiser les textures
---quality 10-100            Qualité des textures (défaut : 85)
---max-res 256|512|1024|2048 Résolution max (défaut : 1024)
+--quality 10-100            Qualité des images .png/.jpg (défaut : 85)
+--max-res 256|512|1024|2048 Résolution max des textures (défaut : 1024)
 --compress-sounds           Compresser les sons (nécessite ffmpeg)
 --sound-quality BITRATE     64k / 96k / 128k / 192k / 320k
 --zip-level 1-9             Niveau ZIP (défaut : 6)
 --no-lua                    Ne pas générer le fichier Lua PM
 --no-lua-chands             Ne pas inclure les C-Hands dans le Lua généré
---no-check-materials        Ne pas vérifier les matériaux/textures manquants
+--no-check-materials        Ne pas analyser les matériaux et textures
 --remove-unused-textures    Supprimer les .vtf référencés par aucun .vmt
---dedup-textures            Fusionner les textures identiques (réécrit les .vmt)
+--dedup-textures            Fusionner les textures identiques
 --strip-non-whitelisted     Retirer les fichiers refusés par la whitelist GMA
---no-convert-uncompressed   Ne pas recompresser les .vtf non compressés en DXT
---no-addon-json             Ne pas générer addon.json s'il manque (sortie dossier)
---target-size MO            Taille cible en Mo (ajuste résolution/qualité automatiquement)
---dry-run                   Mode aperçu : affiche les changements sans rien écrire
---backup                    Sauvegarde l'original avant écrasement
---batch                     Traite chaque sous-dossier/.gma de la source comme un addon distinct
+--no-convert-uncompressed   Ne pas recompresser les .vtf en DXT
+--no-addon-json             Ne pas générer addon.json s'il manque
+--target-size MO            Taille cible en Mo
+--dry-run                   Mode aperçu : n'écrit rien
+--backup                    Sauvegarder l'original avant écrasement
+--batch                     Traiter chaque sous-dossier/.gma séparément
 --lang {fr,en}              Langue des messages (défaut : fr)
 ```
 
+</details>
+
 ---
 
-## Dépendances
+## Un problème ? Une idée ?
+
+[Ouvrez un ticket](https://github.com/TenGoKu13/Compressez-PM-gmod/issues) — et
+si la compression s'est mal passée, joignez le journal (onglet *Journal* →
+bouton 💾 *Enregistrer*), ça aide énormément.
+
+Vous voulez contribuer du code ? Tout est expliqué dans
+**[CONTRIBUTING.md](CONTRIBUTING.md)**, et les tickets marqués
+[`good first issue`](https://github.com/TenGoKu13/Compressez-PM-gmod/labels/good%20first%20issue)
+sont faits pour démarrer.
+
+<details>
+<summary><b>Détails techniques</b> (dépendances, structure, tests)</summary>
+
+### Dépendances
 
 | Bibliothèque | Utilité | Obligatoire |
 |---|---|---|
 | `srctools` | Redimensionnement des `.vtf` et recompression DXT | Non (fortement recommandé) |
-| `Pillow` | Textures .png/.jpg/.tga | Non (recommandé) |
-| `tkinterdnd2` | Glisser-déposer (GUI) | Non (inclus dans l'.exe) |
-| `ffmpeg` | Sons .mp3/.wav/.ogg | Non |
+| `Pillow` | Images `.png` / `.jpg` / `.tga` | Non (recommandé) |
+| `tkinterdnd2` | Glisser-déposer dans la fenêtre | Non (inclus dans l'`.exe`) |
+| `ffmpeg` | Sons `.mp3` / `.wav` / `.ogg` | Non |
 
-Les trois premières sont installées par `pip install -r requirements.txt` et
-embarquées dans l'exécutable Windows.
+`pip install -r requirements.txt` installe les trois premières, et l'exécutable
+Windows les embarque. **Sans `srctools`**, les `.vtf` ne sont réduits que par
+troncature de mipmaps : pas de recompression DXT, et les textures sans chaîne
+de mipmaps restent intactes.
 
-**Sans `srctools`**, les `.vtf` ne sont réduits que par troncature de mipmaps —
-aucune recompression DXT, et les textures sans chaîne de mipmaps restent
-intactes. C'est la différence entre un addon divisé par dix et un addon à peine
-allégé. Sans `Pillow`/`ffmpeg`, les optimisations C-Hands, fichiers inutiles et
-ZIP fonctionnent toujours.
-
----
-
-## Structure du projet
-
-Le code est organisé en package `cpm/` (le fichier `compressez_pm.py` reste le
-point d'entrée et ré-exporte l'API publique) :
+### Structure
 
 ```
 compressez_pm.py   Point d'entrée (CLI + GUI)
 cpm/
-├── deps.py         Dépendances optionnelles (Pillow, srctools, ffmpeg)
+├── deps.py         Dépendances optionnelles
 ├── constants.py    Constantes globales
 ├── i18n.py         Traductions FR / EN
 ├── changelog.py    Nouveautés affichées dans l'application
@@ -196,41 +252,33 @@ tools/
 └── check_no_comments.py   Vérification du style du dépôt (CI)
 ```
 
-### Style du dépôt
-
-Le code ne contient **aucun commentaire ni docstring** : les noms et les clés
-de traduction portent l'explication. La CI refuse toute PR qui en réintroduit
-(`python tools/check_no_comments.py .`). Voir [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Tests
+### Tests
 
 ```bash
 pip install -r requirements-dev.txt
-pytest -q
+xvfb-run -a pytest -q      # sous Linux
+pytest -q                  # ailleurs
 ```
 
-Les tests couvrent le moteur d'analyse (parsing `.mdl`/`.vmt`/`.vtf`, graphe de
-dépendances, doublons, dédup, whitelist GMA, audit, données du rapport), le
-round-trip `.gma`, la génération Lua, le pipeline `.vtf` (redimensionnement,
-choix DXT1/DXT5, cubemaps ignorés) et l'interface graphique elle-même
-(construction des pages, thème, langue, compression complète, mode batch).
+Moteur d'analyse, round-trip `.gma`, génération Lua, pipeline `.vtf` et
+interface graphique. Les tests d'interface se sautent tout seuls sans écran.
+La CI les rejoue sur Python 3.10, 3.11 et 3.12 avant chaque build de l'`.exe`.
 
-Les tests d'interface ont besoin d'un serveur X ; ils se sautent tout seuls
-sans écran, et tournent sous `xvfb-run` en CI :
+### Style du dépôt
 
-```bash
-xvfb-run -a pytest -q
-```
+Le code ne contient **aucun commentaire ni docstring** : les noms et les clés de
+traduction portent l'explication. La CI refuse toute PR qui en réintroduit
+(`python tools/check_no_comments.py .`).
 
-La CI exécute la suite avant chaque build de l'exécutable Windows.
+</details>
 
 ---
 
-## Contribuer
+<div align="center">
 
-Les contributions sont bienvenues : voir [CONTRIBUTING.md](CONTRIBUTING.md)
-pour l'installation, le style de code et l'ajout de traductions.
+**Logiciel libre sous licence [MIT](LICENSE)** — utilisez-le, modifiez-le,
+redistribuez-le, même commercialement.
 
-## Licence
+Fait pour la communauté Garry's Mod 🔧
 
-[MIT](LICENSE) © 2026 TenGoKu13
+</div>
