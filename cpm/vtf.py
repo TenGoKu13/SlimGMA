@@ -75,6 +75,7 @@ def _target_size(width: int, height: int, max_res: int | None) -> tuple[int, int
 
 
 def _downscale(frame, width: int, height: int):
+    frame.load()
     while frame.width > width or frame.height > height:
         smaller = Frame(max(1, frame.width // 2), max(1, frame.height // 2))
         smaller.rescale_from(frame)

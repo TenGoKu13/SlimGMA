@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 LICENSE_NAME = "MIT"
 REPO_URL = "https://github.com/TenGoKu13/Compressez-PM-gmod"
 

@@ -5,6 +5,16 @@ CHANGE = 'change'
 
 RELEASES: list[dict] = [
     {
+        'version': '1.2.1',
+        'date': '2026-08-13',
+        'entries': [
+            (FIX, {
+                'fr': "Les textures sortaient entièrement noires : les pixels du .vtf n'étaient jamais décodés avant redimensionnement. Si vous avez compressé un addon avec la 1.2.0, repartez de l'original.",
+                'en': "Textures came out completely black: the .vtf pixels were never decoded before resizing. If you compressed an addon with 1.2.0, start again from the original.",
+            }),
+        ],
+    },
+    {
         'version': '1.2.0',
         'date': '2026-08-12',
         'entries': [
