@@ -34,10 +34,13 @@ def test_entries_are_translated_and_typed():
 
 
 def test_releases_since():
-    assert [r['version'] for r in releases_since('1.1.0')] == ['1.2.0']
-    assert releases_since('1.2.0') == []
     assert releases_since(VERSION) == []
     assert len(releases_since('0.0.0')) == len(RELEASES)
+
+    previous = RELEASES[1]['version']
+    newer = [r['version'] for r in releases_since(previous)]
+    assert newer == [r['version'] for r in RELEASES[:1]]
+    assert previous not in newer
 
 
 def test_releases_since_tolerates_unusable_values():

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.1 — 2026-08-13
+
+### Correction critique
+- **Les textures sortaient entièrement noires.** srctools décode les pixels
+  d'un `.vtf` à la demande : `VTF.read()` ne lit que l'en-tête, et il faut
+  appeler `Frame.load()` avant de toucher aux pixels. `cpm/vtf.py` ne le
+  faisait pas, redimensionnait donc un tampon vide et réencodait du noir. Tout
+  addon compressé avec la 1.2.0 avait ses textures détruites — en jeu, le
+  modèle apparaissait tout noir.
+- **Pourquoi les tests ne l'ont pas vu** : ils vérifiaient les dimensions, le
+  format, le nombre de mipmaps et la taille du fichier — jamais le contenu.
+  Une texture entièrement noire produit un DXT1 parfaitement valide et bien
+  plus léger, donc toutes les assertions passaient.
+- Six tests ajoutés qui comparent les **pixels** avant/après : downscale,
+  conversion de format, chaque format source, canal alpha, mipmaps générés, et
+  sortie du compresseur. Vérifié : en réintroduisant le bug, cinq d'entre eux
+  échouent.
+
+**Si vous avez compressé un addon avec la 1.2.0, repartez de l'original.**
+Les fichiers produits ne sont pas récupérables.
+
 ## 1.2.0 — 2026-08-12
 
 ### Refonte complète de l'affichage

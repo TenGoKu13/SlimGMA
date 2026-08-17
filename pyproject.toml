@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "compressez-pm-gmod"
-version = "1.2.0"
+version = "1.2.1"
 description = "Compresseur d'addons Playermodel pour Garry's Mod (GUI + CLI)"
 readme = "README.md"
 requires-python = ">=3.10"
