@@ -98,6 +98,38 @@ def _rebuild_flags(source, fmt):
     return flags
 
 
+BLANK_SAMPLES = 8
+
+
+def _has_colour(frame) -> bool:
+    step_x = max(1, frame.width // BLANK_SAMPLES)
+    step_y = max(1, frame.height // BLANK_SAMPLES)
+    for x in range(0, frame.width, step_x):
+        for y in range(0, frame.height, step_y):
+            if tuple(frame[x, y])[:3] != (0, 0, 0):
+                return True
+    return False
+
+
+CARRIED_HEADER = (
+    ('reflectivity', 'ref'),
+    ('bumpmap_scale', 'bump_scale'),
+    ('low_format', 'thumb_fmt'),
+    ('sheet_info', 'sheet_info'),
+    ('hotspot_info', 'hotspot_info'),
+    ('hotspot_flags', 'hotspot_flags'),
+)
+
+
+def _carried_header(source) -> dict:
+    carried = {}
+    for attribute, parameter in CARRIED_HEADER:
+        value = getattr(source, attribute, None)
+        if value is not None:
+            carried[parameter] = value
+    return carried
+
+
 def optimize(data: bytes, max_res: int | None, to_dxt: bool = True) -> bytes | None:
     if not SRCTOOLS_AVAILABLE:
         return None
@@ -112,8 +144,14 @@ def optimize(data: bytes, max_res: int | None, to_dxt: bool = True) -> bytes | N
         return None
 
     width, height = _target_size(source.width, source.height, max_res)
-    frame = _downscale(source.get(mipmap=0), width, height)
+    original = source.get(mipmap=0)
+    frame = _downscale(original, width, height)
     if (frame.width, frame.height) != (width, height):
+        return None
+    try:
+        if _has_colour(original) and not _has_colour(frame):
+            return None
+    except Exception:
         return None
 
     fmt = _target_format(source, frame, to_dxt)
@@ -121,7 +159,7 @@ def optimize(data: bytes, max_res: int | None, to_dxt: bool = True) -> bytes | N
         return None
 
     result = VTF(width, height, version=source.version, fmt=fmt,
-                 flags=_rebuild_flags(source, fmt))
+                 flags=_rebuild_flags(source, fmt), **_carried_header(source))
     result.get(mipmap=0).copy_from(frame)
     result.compute_mipmaps()
 

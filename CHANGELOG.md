@@ -18,6 +18,18 @@
   sortie du compresseur. Vérifié : en réintroduisant le bug, cinq d'entre eux
   échouent.
 
+### Deux défauts de la même famille, trouvés en cherchant celui-ci
+- **La réflectivité de l'en-tête était écrasée à zéro.** Reconstruire le `.vtf`
+  perdait `reflectivity` et `bumpmap_scale`, dont Source se sert pour
+  l'éclairage. Ces champs sont désormais reportés, avec la miniature basse
+  résolution et les métadonnées de sprite sheet.
+- **Garde-fou à l'écriture** : avant d'enregistrer, l'outil compare la texture
+  d'origine et la version redimensionnée. Si la source a de la couleur et que
+  le résultat n'en a plus, il refuse et conserve l'original. Toute erreur
+  pendant cette vérification conduit aussi à conserver l'original. Un bug de
+  ce genre ne peut plus produire un fichier détruit — au pire, une texture non
+  optimisée.
+
 **Si vous avez compressé un addon avec la 1.2.0, repartez de l'original.**
 Les fichiers produits ne sont pas récupérables.
 

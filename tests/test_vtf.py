@@ -174,3 +174,34 @@ def test_compressor_output_is_not_black():
                             status_fn=lambda *_: None)
     data = make_solid(256, 256)
     assert_colour_kept(data, compressor._process_vtf('m/x.vtf', data, 64, 85))
+
+
+def test_header_fields_are_carried_over():
+    image = VTF(64, 64, fmt=ImageFormats.RGBA8888, ref=(0.42, 0.31, 0.27),
+                bump_scale=3.5, flags=VTFFlags.NORMAL)
+    frame = image.get(mipmap=0)
+    for x in range(64):
+        for y in range(64):
+            frame[x, y] = (120, 90, 70, 255)
+    buffer = io.BytesIO()
+    image.save(buffer)
+    data = buffer.getvalue()
+
+    source, result = read(data), read(vtf_tools.optimize(data, 32, to_dxt=True))
+    assert str(result.reflectivity) == str(source.reflectivity)
+    assert result.bumpmap_scale == source.bumpmap_scale
+    assert result.flags == source.flags
+    assert result.version == source.version
+
+
+def test_declines_rather_than_writing_a_blank_texture(monkeypatch):
+    data = make_solid(128, 128)
+    assert vtf_tools.optimize(data, 64, to_dxt=True) is not None
+
+    monkeypatch.setattr(vtf_tools.Frame, 'load', lambda self: None)
+    assert vtf_tools.optimize(data, 64, to_dxt=True) is None
+
+
+def test_a_genuinely_black_texture_is_still_processed():
+    data = make_solid(64, 64, colour=(0, 0, 0))
+    assert vtf_tools.optimize(data, 32, to_dxt=True) is not None
