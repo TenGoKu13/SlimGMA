@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "compressez-pm-gmod"
+name = "slimgma"
 version = "1.2.1"
-description = "Compresseur d'addons Playermodel pour Garry's Mod (GUI + CLI)"
+description = "Slimgma – compresseur d'addons Playermodel pour Garry's Mod (GUI + CLI)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -41,7 +41,7 @@ Issues = "https://github.com/TenGoKu13/Compressez-PM-gmod/issues"
 Changelog = "https://github.com/TenGoKu13/Compressez-PM-gmod/blob/main/CHANGELOG.md"
 
 [project.scripts]
-compressez-pm = "cpm.cli:cli_main"
+slimgma = "cpm.cli:cli_main"
 
 [tool.setuptools]
 packages = ["cpm"]

@@ -9,14 +9,14 @@ def cli_main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog='compressez_pm',
-        description="Compressez PM GMod – Compresseur d'addons Playermodel",
+        prog='slimgma',
+        description="Slimgma – Compresseur d'addons Playermodel pour Garry's Mod",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemples :
-  python compressez_pm.py mon_addon/              sortie/
-  python compressez_pm.py mon_addon.gma           sortie.gma   --keep-chands
-  python compressez_pm.py mon_addon/              sortie.zip   --format zip --quality 70 --max-res 512
+  python slimgma.py mon_addon/              sortie/
+  python slimgma.py mon_addon.gma           sortie.gma   --keep-chands
+  python slimgma.py mon_addon/              sortie.zip   --format zip --quality 70 --max-res 512
         """,
     )
     parser.add_argument('source',   help="Dossier ou fichier .gma source")

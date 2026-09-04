@@ -1,18 +1,18 @@
 <div align="center">
 
-# 🗜️ Compressez PM GMod
+# 🗜️ Slimgma
 
-### Votre playermodel pèse 200 Mo ? Il peut peser 20.
+### Vos addons Garry's Mod, en plus léger.
 
-Un outil gratuit qui allège vos addons **Playermodel** pour Garry's Mod,
-sans les casser et sans que ça se voie en jeu.
+Votre playermodel pèse 200 Mo ? Il peut peser 20. Un outil gratuit qui allège
+vos addons **Playermodel**, sans les casser et sans que ça se voie en jeu.
 
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Tests](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml/badge.svg)](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml)
 [![Téléchargement](https://img.shields.io/github/v/release/TenGoKu13/Compressez-PM-gmod?label=t%C3%A9l%C3%A9charger&color=success)](https://github.com/TenGoKu13/Compressez-PM-gmod/releases/latest)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-<img src="docs/images/source.png" width="820" alt="La fenêtre principale de Compressez PM GMod">
+<img src="docs/images/source.png" width="820" alt="La fenêtre principale de Slimgma">
 
 </div>
 
@@ -86,7 +86,7 @@ Un seul fichier `.exe`, rien à installer. Double-cliquez, c'est parti.
 git clone https://github.com/TenGoKu13/Compressez-PM-gmod.git
 cd Compressez-PM-gmod
 pip install -r requirements.txt
-python compressez_pm.py
+python slimgma.py
 ```
 
 Python 3.10 ou plus récent. Pour compresser aussi les **sons**, installez
@@ -167,9 +167,9 @@ Non. Tout se passe sur votre machine, l'outil n'a besoin d'aucune connexion.
 Pour automatiser, tout est aussi disponible en CLI :
 
 ```bash
-python compressez_pm.py mon_addon/ sortie/
-python compressez_pm.py mon_addon.gma sortie.gma --max-res 512
-python compressez_pm.py mes_addons/ sorties/ --batch --target-size 10
+python slimgma.py mon_addon/ sortie/
+python slimgma.py mon_addon.gma sortie.gma --max-res 512
+python slimgma.py mes_addons/ sorties/ --batch --target-size 10
 ```
 
 <details>
@@ -236,7 +236,7 @@ de mipmaps restent intactes.
 ### Structure
 
 ```
-compressez_pm.py   Point d'entrée (CLI + GUI)
+slimgma.py         Point d'entrée (CLI + GUI)
 cpm/
 ├── deps.py         Dépendances optionnelles
 ├── constants.py    Constantes globales

@@ -2,6 +2,19 @@
 
 ## 1.2.1 — 2026-08-13
 
+### L'outil s'appelle désormais Slimgma
+- « Compressez PM GMod » était long, difficile à retenir et contenait une
+  marque tierce. **Slimgma** (« slim » + `.gma`) dit ce que fait l'outil, sur
+  le format que ses utilisateurs manipulent, et se comprend en français comme
+  en anglais.
+- L'exécutable devient `Slimgma.exe`, le script d'entrée `slimgma.py`, la
+  commande `slimgma`, et le paquet Python `slimgma`.
+- **Les préférences existantes sont migrées** : au premier lancement, l'app lit
+  l'ancien dossier `CompressezPMGMod/` s'il existe et réécrit dans `Slimgma/`.
+  Thème, langue, sources récentes et historique de nouveautés sont conservés.
+- Le package interne reste `cpm/` : le renommer entrerait en conflit avec
+  `slimgma.py` et obligerait à modifier la cible PyInstaller, non testable ici.
+
 ### Correction critique
 - **Les textures sortaient entièrement noires.** srctools décode les pixels
   d'un `.vtf` à la demande : `VTF.read()` ne lit que l'en-tête, et il faut
@@ -17,6 +30,18 @@
   conversion de format, chaque format source, canal alpha, mipmaps générés, et
   sortie du compresseur. Vérifié : en réintroduisant le bug, cinq d'entre eux
   échouent.
+
+### Deux défauts de la même famille, trouvés en cherchant celui-ci
+- **La réflectivité de l'en-tête était écrasée à zéro.** Reconstruire le `.vtf`
+  perdait `reflectivity` et `bumpmap_scale`, dont Source se sert pour
+  l'éclairage. Ces champs sont désormais reportés, avec la miniature basse
+  résolution et les métadonnées de sprite sheet.
+- **Garde-fou à l'écriture** : avant d'enregistrer, l'outil compare la texture
+  d'origine et la version redimensionnée. Si la source a de la couleur et que
+  le résultat n'en a plus, il refuse et conserve l'original. Toute erreur
+  pendant cette vérification conduit aussi à conserver l'original. Un bug de
+  ce genre ne peut plus produire un fichier détruit — au pire, une texture non
+  optimisée.
 
 **Si vous avez compressé un addon avec la 1.2.0, repartez de l'original.**
 Les fichiers produits ne sont pas récupérables.

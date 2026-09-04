@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import compressez_pm as m
+import slimgma as m
 
 
 def make_mdl(material_name: str = "head", cdmaterials: str = "models/mymodel/") -> bytes:

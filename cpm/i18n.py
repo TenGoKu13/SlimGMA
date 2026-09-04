@@ -1,6 +1,6 @@
 STRINGS: dict[str, dict[str, str]] = {
     'cli_deprecated': {'fr': "⚠ {flag} est déprécié : cette suppression est désormais active par défaut. Utilisez {alt} pour la désactiver.", 'en': "⚠ {flag} is deprecated: this removal is now on by default. Use {alt} to turn it off."},
-    'cli_header': {'fr': "Compressez PM GMod v{version} – mode CLI\n", 'en': "Compressez PM GMod v{version} – CLI mode\n"},
+    'cli_header': {'fr': "Slimgma v{version} – mode CLI\n", 'en': "Slimgma v{version} – CLI mode\n"},
 
     'loading_files':   {'fr': "Chargement des fichiers…", 'en': "Loading files…"},
     'err_no_files':    {'fr': "✗ ERREUR : Aucun fichier trouvé dans la source.", 'en': "✗ ERROR: No files found in source."},
@@ -213,7 +213,7 @@ STRINGS: dict[str, dict[str, str]] = {
 
     'btn_changelog':      {'fr': "✨ Nouveautés", 'en': "✨ What's new"},
     'changelog_title':    {'fr': "Nouveautés", 'en': "What's new"},
-    'changelog_sub':      {'fr': "Ce qui a changé dans Compressez PM GMod", 'en': "What changed in Compressez PM GMod"},
+    'changelog_sub':      {'fr': "Ce qui a changé dans Slimgma", 'en': "What changed in Slimgma"},
     'changelog_new':      {'fr': "NOUVEAU", 'en': "NEW"},
     'changelog_fix':      {'fr': "CORRIGÉ", 'en': "FIXED"},
     'changelog_change':   {'fr': "MODIFIÉ", 'en': "CHANGED"},
@@ -374,7 +374,7 @@ STRINGS: dict[str, dict[str, str]] = {
     'about_intro':     {'fr': "Compresseur d'addons Playermodel pour Garry's Mod.\nRéduit la taille des textures, des sons et des fichiers\ninutiles tout en préservant le rendu en jeu.\n\nCode source et contributions :",
                         'en': "Playermodel addon compressor for Garry's Mod.\nShrinks textures, sounds and junk files while\npreserving the in-game look.\n\nSource code and contributions:"},
 
-    'log_app_version':    {'fr': "Compressez PM GMod  v{version}", 'en': "Compressez PM GMod  v{version}"},
+    'log_app_version':    {'fr': "Slimgma  v{version}", 'en': "Slimgma  v{version}"},
     'log_install_pillow': {'fr': "→ pip install Pillow   (optimisation .png/.jpg/.tga)", 'en': "→ pip install Pillow   (.png/.jpg/.tga optimization)"},
 }
 

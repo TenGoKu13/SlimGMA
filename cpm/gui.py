@@ -23,7 +23,7 @@ except ImportError:
 
 from .deps import PIL_AVAILABLE, SRCTOOLS_AVAILABLE, FFMPEG_AVAILABLE
 from .constants import (
-    VERSION, LICENSE_NAME, REPO_URL, CONFIG_PATH,
+    APP_NAME, VERSION, LICENSE_NAME, REPO_URL, CONFIG_PATH, LEGACY_CONFIG_PATH,
     TEXTURE_EXTENSIONS, SOUND_EXTENSIONS,
 )
 from .i18n import t
@@ -184,7 +184,7 @@ class App:
         self._apply_palette()
 
         self.root = TkinterDnD.Tk() if DND_AVAILABLE else tk.Tk()
-        self.root.title(f"Compressez PM GMod  v{VERSION}")
+        self.root.title(f"{APP_NAME}  v{VERSION}")
         self.root.geometry("1000x760")
         self.root.configure(bg=self.BG)
         self.root.minsize(880, 620)
@@ -377,7 +377,7 @@ class App:
         titles.pack(side='left')
         row = tk.Frame(titles, bg=self.SIDEBAR)
         row.pack(anchor='w')
-        tk.Label(row, text="Compressez PM GMod", bg=self.SIDEBAR, fg=self.FG,
+        tk.Label(row, text=APP_NAME, bg=self.SIDEBAR, fg=self.FG,
                  font=('Segoe UI', 13, 'bold')).pack(side='left')
         tk.Label(row, text=f"v{VERSION}", bg=self.SIDEBAR, fg=self.SUB,
                  font=('Segoe UI', 8)).pack(side='left', padx=(8, 0), pady=(4, 0))
@@ -1635,7 +1635,7 @@ class App:
                  font=('Segoe UI', 22)).pack(side='left', padx=(0, 12))
         titles = tk.Frame(head, bg=self.BG)
         titles.pack(side='left')
-        tk.Label(titles, text="Compressez PM GMod", bg=self.BG, fg=self.FG,
+        tk.Label(titles, text=APP_NAME, bg=self.BG, fg=self.FG,
                  font=('Segoe UI', 14, 'bold')).pack(anchor='w')
         tk.Label(titles, text=f"v{VERSION}  ·  {self.t('sidebar_oss')}",
                  bg=self.BG, fg=self.SUB, font=('Segoe UI', 9)).pack(anchor='w')
@@ -1989,10 +1989,12 @@ class App:
 
     @staticmethod
     def _load_config() -> dict | None:
-        try:
-            return json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            return None
+        for path in (CONFIG_PATH, LEGACY_CONFIG_PATH):
+            try:
+                return json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                continue
+        return None
 
     def _save_config(self):
         try:

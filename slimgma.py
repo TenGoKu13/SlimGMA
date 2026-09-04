@@ -20,5 +20,5 @@ if __name__ == '__main__':
         App().run()
     else:
         print("tkinter non disponible. Utilisez le mode CLI :")
-        print("  python compressez_pm.py --help")
+        print("  python slimgma.py --help")
         sys.exit(1)

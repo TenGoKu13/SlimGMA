@@ -8,9 +8,21 @@ RELEASES: list[dict] = [
         'version': '1.2.1',
         'date': '2026-08-13',
         'entries': [
+            (CHANGE, {
+                'fr': "L'outil s'appelle désormais Slimgma. Vos réglages, votre langue et vos sources récentes sont conservés automatiquement.",
+                'en': "The tool is now called Slimgma. Your settings, language and recent sources are carried over automatically.",
+            }),
             (FIX, {
                 'fr': "Les textures sortaient entièrement noires : les pixels du .vtf n'étaient jamais décodés avant redimensionnement. Si vous avez compressé un addon avec la 1.2.0, repartez de l'original.",
                 'en': "Textures came out completely black: the .vtf pixels were never decoded before resizing. If you compressed an addon with 1.2.0, start again from the original.",
+            }),
+            (FIX, {
+                'fr': "L'éclairage des textures pouvait changer : la réflectivité et l'échelle de bump de l'en-tête étaient perdues à la réécriture. Elles sont désormais conservées.",
+                'en': "Texture lighting could change: the header's reflectivity and bump scale were lost when rewriting. They are now preserved.",
+            }),
+            (NEW, {
+                'fr': "Garde-fou : si une texture perd toute sa couleur pendant l'optimisation, l'outil garde l'originale au lieu d'écrire un fichier abîmé.",
+                'en': "Safety net: if a texture loses all its colour during optimization, the tool keeps the original instead of writing a damaged file.",
             }),
         ],
     },

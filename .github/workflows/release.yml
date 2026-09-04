@@ -28,18 +28,18 @@ jobs:
       - name: Construire l'exécutable
         run: >
           python -m PyInstaller --onefile --windowed
-          --name "Compressez-PM-GMod"
+          --name "Slimgma"
           --collect-all tkinterdnd2 --collect-all srctools
-          compressez_pm.py
+          slimgma.py
 
       - name: Vérifier que l'exécutable démarre
-        run: dist\Compressez-PM-GMod.exe --help
+        run: dist\Slimgma.exe --help
         shell: cmd
 
       - uses: actions/upload-artifact@v7
         with:
           name: exe
-          path: dist/Compressez-PM-GMod.exe
+          path: dist/Slimgma.exe
 
   publish:
     needs: build
@@ -72,8 +72,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.notes.outputs.tag }}
-          name: Compressez PM GMod ${{ steps.notes.outputs.tag }}
+          name: Slimgma ${{ steps.notes.outputs.tag }}
           body_path: notes.md
-          files: dist/Compressez-PM-GMod.exe
+          files: dist/Slimgma.exe
           draft: false
           prerelease: false

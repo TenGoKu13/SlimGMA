@@ -3,20 +3,22 @@ import sys
 from pathlib import Path
 
 
+APP_NAME = "Slimgma"
 VERSION = "1.2.1"
 LICENSE_NAME = "MIT"
 REPO_URL = "https://github.com/TenGoKu13/Compressez-PM-gmod"
 
+LEGACY_CONFIG_DIR = 'CompressezPMGMod'
 
-def _config_path() -> Path:
+
+def _config_base() -> Path:
     if sys.platform == 'win32':
-        base = Path(os.environ.get('APPDATA', Path.home()))
-    else:
-        base = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
-    return base / 'CompressezPMGMod' / 'config.json'
+        return Path(os.environ.get('APPDATA', Path.home()))
+    return Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
 
 
-CONFIG_PATH = _config_path()
+CONFIG_PATH = _config_base() / APP_NAME / 'config.json'
+LEGACY_CONFIG_PATH = _config_base() / LEGACY_CONFIG_DIR / 'config.json'
 
 CHAND_PATTERNS = [
     r"models/weapons/c_.*",

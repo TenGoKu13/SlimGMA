@@ -1,4 +1,4 @@
-# Contribuer à Compressez PM GMod
+# Contribuer à Slimgma
 
 Merci de vouloir aider ! Ce projet est un logiciel libre sous licence MIT :
 toute contribution est la bienvenue, du signalement de bug à la traduction.
@@ -55,8 +55,9 @@ les clés manquantes.
 ## Organisation du code
 
 ```
-compressez_pm.py   Point d'entrée (CLI + GUI)
-cpm/
+slimgma.py         Point d'entrée (CLI + GUI)
+cpm/                Package interne (le nom historique est conservé :
+│                   le renommer entrerait en conflit avec slimgma.py)
 ├── deps.py         Dépendances optionnelles (Pillow, srctools, ffmpeg)
 ├── constants.py    Constantes globales
 ├── i18n.py         Traductions FR / EN
