@@ -2,6 +2,19 @@
 
 ## 1.2.1 — 2026-08-13
 
+### L'outil s'appelle désormais Slimgma
+- « Compressez PM GMod » était long, difficile à retenir et contenait une
+  marque tierce. **Slimgma** (« slim » + `.gma`) dit ce que fait l'outil, sur
+  le format que ses utilisateurs manipulent, et se comprend en français comme
+  en anglais.
+- L'exécutable devient `Slimgma.exe`, le script d'entrée `slimgma.py`, la
+  commande `slimgma`, et le paquet Python `slimgma`.
+- **Les préférences existantes sont migrées** : au premier lancement, l'app lit
+  l'ancien dossier `CompressezPMGMod/` s'il existe et réécrit dans `Slimgma/`.
+  Thème, langue, sources récentes et historique de nouveautés sont conservés.
+- Le package interne reste `cpm/` : le renommer entrerait en conflit avec
+  `slimgma.py` et obligerait à modifier la cible PyInstaller, non testable ici.
+
 ### Correction critique
 - **Les textures sortaient entièrement noires.** srctools décode les pixels
   d'un `.vtf` à la demande : `VTF.read()` ne lit que l'en-tête, et il faut

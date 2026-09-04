@@ -8,6 +8,10 @@ RELEASES: list[dict] = [
         'version': '1.2.1',
         'date': '2026-08-13',
         'entries': [
+            (CHANGE, {
+                'fr': "L'outil s'appelle désormais Slimgma. Vos réglages, votre langue et vos sources récentes sont conservés automatiquement.",
+                'en': "The tool is now called Slimgma. Your settings, language and recent sources are carried over automatically.",
+            }),
             (FIX, {
                 'fr': "Les textures sortaient entièrement noires : les pixels du .vtf n'étaient jamais décodés avant redimensionnement. Si vous avez compressé un addon avec la 1.2.0, repartez de l'original.",
                 'en': "Textures came out completely black: the .vtf pixels were never decoded before resizing. If you compressed an addon with 1.2.0, start again from the original.",

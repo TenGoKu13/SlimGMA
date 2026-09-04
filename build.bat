@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo   Compressez PM GMod - Build .exe
+echo   Slimgma - Build .exe
 echo ============================================
 echo.
 
@@ -21,7 +21,7 @@ if errorlevel 1 (
 )
 
 echo [2/3] Construction de l'executable...
-python -m PyInstaller --onefile --windowed --name "Compressez-PM-GMod" --collect-all tkinterdnd2 --collect-all srctools compressez_pm.py
+python -m PyInstaller --onefile --windowed --name "Slimgma" --collect-all tkinterdnd2 --collect-all srctools slimgma.py
 if errorlevel 1 (
     echo ERREUR lors de la construction.
     pause
@@ -30,12 +30,12 @@ if errorlevel 1 (
 
 echo [3/3] Nettoyage...
 rmdir /s /q build 2>nul
-del /q "Compressez-PM-GMod.spec" 2>nul
+del /q "Slimgma.spec" 2>nul
 
 echo.
 echo ============================================
 echo   OK ! Executable cree :
-echo   dist\Compressez-PM-GMod.exe
+echo   dist\Slimgma.exe
 echo ============================================
 echo.
 pause
