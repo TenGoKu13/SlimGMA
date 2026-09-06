@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.1 — 2026-08-13
+## 1.2.1 — 2026-09-06
 
 ### L'outil s'appelle désormais Slimgma
 - « Compressez PM GMod » était long, difficile à retenir et contenait une

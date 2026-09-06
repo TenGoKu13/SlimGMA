@@ -6,7 +6,7 @@ CHANGE = 'change'
 RELEASES: list[dict] = [
     {
         'version': '1.2.1',
-        'date': '2026-08-13',
+        'date': '2026-09-06',
         'entries': [
             (CHANGE, {
                 'fr': "L'outil s'appelle désormais Slimgma. Vos réglages, votre langue et vos sources récentes sont conservés automatiquement.",
