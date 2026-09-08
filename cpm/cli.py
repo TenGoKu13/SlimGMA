@@ -17,10 +17,15 @@ Exemples :
   python slimgma.py mon_addon/              sortie/
   python slimgma.py mon_addon.gma           sortie.gma   --keep-chands
   python slimgma.py mon_addon/              sortie.zip   --format zip --quality 70 --max-res 512
+  python slimgma.py mon_addon/              --in-place --backup
         """,
     )
     parser.add_argument('source',   help="Dossier ou fichier .gma source")
-    parser.add_argument('output',   help="Chemin de sortie")
+    parser.add_argument('output', nargs='?', default=None,
+                        help="Chemin de sortie (inutile avec --in-place)")
+    parser.add_argument('--in-place', action='store_true',
+                        help="Remplacer l'addon d'origine au lieu d'en créer "
+                             "une copie compressée")
     parser.add_argument('--format', choices=['folder', 'gma', 'zip'], default='folder',
                         dest='output_format', help="Format de sortie (défaut : folder)")
     parser.add_argument('--keep-chands', action='store_true',
@@ -79,6 +84,14 @@ Exemples :
 
     args = parser.parse_args()
 
+    if args.in_place:
+        if args.output:
+            parser.error("--in-place et un chemin de sortie sont exclusifs")
+        args.output = args.source
+        args.output_format = 'gma' if args.source.endswith('.gma') else 'folder'
+    elif not args.output:
+        parser.error("chemin de sortie manquant (ou utilisez --in-place)")
+
     for flag, alt in (('no_chands', '--keep-chands'), ('no_unused', '--keep-unused')):
         if getattr(args, flag):
             print(t('cli_deprecated', args.lang,
@@ -109,6 +122,7 @@ Exemples :
         'dry_run':           args.dry_run,
         'backup_original':   args.backup,
         'batch':             args.batch,
+        'in_place':          args.in_place,
         'lang':              args.lang,
     }
 

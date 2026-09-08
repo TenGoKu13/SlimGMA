@@ -45,6 +45,9 @@ fenêtre ou choisi avec *Parcourir*.
 **2. Choisissez un profil** — *Équilibré* convient à presque tout le monde.
 Si vous voulez régler vous-même, tout est dans l'onglet *Options*.
 
+*Vous ne voulez pas gérer un dossier de sortie ?* Cochez **Remplacer l'addon
+d'origine** : votre dossier est compressé sur place.
+
 **3. Cliquez sur Compresser.** C'est fini.
 
 <div align="center">
@@ -124,6 +127,7 @@ Python 3.10 ou plus récent. Pour compresser aussi les **sons**, installez
 | 🎯 **Taille cible** | « Je veux moins de 10 Mo » — l'outil trouve les réglages tout seul. |
 | 👀 **Mode aperçu** | Montre ce qu'il ferait, sans rien écrire sur le disque. |
 | 📚 **Mode lot** | Plusieurs addons d'un coup. |
+| ♻️ **Compresser sur place** | Pas envie de gérer un second dossier ? L'addon d'origine est remplacé directement. |
 | 💾 **Sauvegarde** | Copie horodatée avant d'écraser quoi que ce soit. |
 | 🌍 **Français / English** | Toute l'interface, d'un clic. |
 | 🌓 **Thème clair ou sombre** | Au choix. |
@@ -157,6 +161,12 @@ Regardez l'onglet *Rapport* : il vous dira pourquoi. Souvent l'addon était déj
 bien fait, ou son poids vient des modèles (`.mdl`, `.vvd`) que l'outil ne
 touche pas volontairement — les toucher casserait le modèle.
 
+**« Remplacer l'addon d'origine », c'est risqué ?**
+La version compressée est entièrement construite à côté, et n'échange sa place
+avec l'originale qu'une fois prête. Si quoi que ce soit échoue en route, votre
+addon reste intact. L'outil vous demande confirmation, et l'option *sauvegarde*
+garde une copie horodatée si vous préférez une ceinture de plus.
+
 **Ça envoie mes fichiers quelque part ?**
 Non. Tout se passe sur votre machine, l'outil n'a besoin d'aucune connexion.
 
@@ -170,13 +180,16 @@ Pour automatiser, tout est aussi disponible en CLI :
 python slimgma.py mon_addon/ sortie/
 python slimgma.py mon_addon.gma sortie.gma --max-res 512
 python slimgma.py mes_addons/ sorties/ --batch --target-size 10
+python slimgma.py mon_addon/ --in-place --backup
 ```
 
 <details>
 <summary><b>Toutes les options CLI</b></summary>
 
 ```
-source output               Chemins source et sortie
+source output               Chemins source et sortie (sortie facultative
+                            avec --in-place)
+--in-place                  Remplacer l'addon d'origine
 --format {folder,gma,zip}   Format de sortie (défaut : folder)
 --keep-chands               Conserver les C-Hands (supprimés par défaut)
 --keep-unused               Conserver les fichiers inutiles (supprimés par défaut)

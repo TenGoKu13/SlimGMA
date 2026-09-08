@@ -183,3 +183,44 @@ def test_changelog_marks_versions_as_seen(app):
     settle(app, 0.3)
     assert app._seen_version == VERSION
     assert not app.changelog_btn.cget('text').endswith('•')
+
+
+def test_in_place_disables_the_destination_fields(app):
+    settle(app, 0.1)
+    assert str(app.output_row.winfo_children()[0]['state']) == 'normal'
+
+    app.source_var.set('C:/addons/bob')
+    app.in_place.set(True)
+    app._toggle_in_place()
+    settle(app, 0.1)
+
+    assert app.output_var.get() == 'C:/addons/bob'
+    assert str(app.output_row.winfo_children()[0]['state']) == 'disabled'
+
+    app.in_place.set(False)
+    app._toggle_in_place()
+    settle(app, 0.1)
+    assert str(app.output_row.winfo_children()[0]['state']) == 'normal'
+
+
+def test_in_place_asks_before_overwriting(app, tmp_path, monkeypatch):
+    import cpm.gui as gui_module
+    source = make_addon(tmp_path / 'addon')
+    app.source_var.set(str(source))
+    app.in_place.set(True)
+    app._toggle_in_place()
+    settle(app, 0.1)
+
+    asked = {'count': 0}
+
+    def refuse(*args, **kwargs):
+        asked['count'] += 1
+        return False
+
+    monkeypatch.setattr(gui_module.messagebox, 'askyesno', refuse)
+    app._start()
+    settle(app, 0.2)
+
+    assert asked['count'] == 1
+    assert app._thread is None
+    assert (source / 'lisezmoi.txt').exists()

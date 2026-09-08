@@ -70,11 +70,13 @@ STRINGS: dict[str, dict[str, str]] = {
 
     'addon_json_created': {'fr': "  ✓ addon.json créé (requis par gmad) : {title}", 'en': "  ✓ addon.json created (required by gmad): {title}"},
 
+    'write_in_place':  {'fr': "  ✓ Addon remplacé sur place : {path}", 'en': "  ✓ Addon replaced in place: {path}"},
     'write_folder': {'fr': "  Dossier : {path}/", 'en': "  Folder: {path}/"},
     'write_gma':    {'fr': "  GMA : {path}", 'en': "  GMA: {path}"},
     'write_zip':    {'fr': "  ZIP : {path}", 'en': "  ZIP: {path}"},
 
     'dry_run_active':             {'fr': "  🔍 Mode aperçu activé : aucune modification ne sera écrite sur le disque", 'en': "  🔍 Dry-run mode enabled: nothing will be written to disk"},
+    'dry_run_would_replace':      {'fr': "  [APERÇU] Aurait remplacé l'addon d'origine : {path}", 'en': "  [DRY-RUN] Would have replaced the original addon: {path}"},
     'dry_run_would_write_folder': {'fr': "  [APERÇU] Aurait écrit le dossier : {path}/ ({n} fichier(s))", 'en': "  [DRY-RUN] Would write folder: {path}/ ({n} file(s))"},
     'dry_run_would_write_gma':    {'fr': "  [APERÇU] Aurait écrit le GMA : {path}", 'en': "  [DRY-RUN] Would write GMA: {path}"},
     'dry_run_would_write_zip':    {'fr': "  [APERÇU] Aurait écrit le ZIP : {path}", 'en': "  [DRY-RUN] Would write ZIP: {path}"},
@@ -199,6 +201,13 @@ STRINGS: dict[str, dict[str, str]] = {
 
     'card_source':   {'fr': "Addon source",     'en': "Source addon"},
     'card_output':   {'fr': "Destination",      'en': "Destination"},
+    'chk_in_place':  {'fr': "Remplacer l'addon d'origine", 'en': "Replace the original addon"},
+    'desc_in_place': {'fr': "  Écrit directement dans le dossier source, sans en créer un second", 'en': "  Writes straight into the source folder, without creating a second one"},
+    'tip_in_place':  {'fr': "L'addon d'origine est remplacé par sa version compressée. Le nouveau contenu est préparé à côté puis échangé d'un bloc : en cas d'erreur, rien n'est touché. Cochez « Sauvegarder l'original » pour en garder une copie.", 'en': "The original addon is replaced by its compressed version. The new content is built alongside and swapped in one go: if anything fails, nothing is touched. Tick “Back up original” to keep a copy."},
+    'in_place_confirm_title': {'fr': "Remplacer l'addon d'origine ?", 'en': "Replace the original addon?"},
+    'in_place_confirm_body':  {'fr': "{path}\n\nCet addon sera remplacé par sa version compressée.\n\nContinuer ?", 'en': "{path}\n\nThis addon will be replaced by its compressed version.\n\nContinue?"},
+    'in_place_confirm_backup': {'fr': "Une sauvegarde horodatée sera conservée à côté.", 'en': "A timestamped backup will be kept alongside."},
+    'in_place_confirm_nobackup': {'fr': "⚠ Aucune sauvegarde ne sera conservée.", 'en': "⚠ No backup will be kept."},
     'card_profile':  {'fr': "Profil rapide",    'en': "Quick profile"},
     'card_cleanup':  {'fr': "Nettoyage",        'en': "Cleanup"},
     'card_textures': {'fr': "Textures",         'en': "Textures"},

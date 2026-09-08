@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.0 — 2026-09-08
+
+### Compresser l'addon sur place
+- Nouvelle option **« Remplacer l'addon d'origine »** : plus besoin de choisir
+  un dossier de destination, l'addon source est remplacé par sa version
+  compressée. En ligne de commande, `--in-place` (le chemin de sortie devient
+  facultatif).
+- **Les fichiers retirés disparaissent vraiment.** L'écriture en sortie dossier
+  se contentait d'écrire les fichiers conservés, sans supprimer ceux que le
+  compresseur avait retirés : écrire naïvement sur la source aurait laissé les
+  C-Hands et les `.txt` en place, et l'addon n'aurait pas maigri.
+- **Écriture par échange atomique** : le nouveau contenu est construit dans un
+  dossier voisin, puis l'ancien est mis de côté et le nouveau prend sa place.
+  Si quoi que ce soit échoue, l'ancien est remis — vérifié par un test qui
+  provoque une panne au milieu de l'échange et compare les octets.
+- **Confirmation obligatoire** dans l'interface avant d'écraser, indiquant
+  clairement si une sauvegarde sera conservée ou non.
+- Cochez **« Sauvegarder l'original »** pour garder une copie horodatée à côté.
+- Compatible avec le mode lot : chaque addon du dossier est remplacé chez lui.
+- Le mode aperçu ne touche à rien, comme partout ailleurs.
+
 ## 1.2.1 — 2026-09-06
 
 ### L'outil s'appelle désormais Slimgma

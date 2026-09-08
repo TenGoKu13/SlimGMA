@@ -854,9 +854,8 @@ class Compressor:
             self.log(self.t('backup_failed', e=e))
 
     def _write_output(self, files: dict, src: Path) -> None:
-        output  = Path(self.opts['output'])
-        fmt     = self.opts.get('output_format', 'folder')
-        zip_lvl = self.opts.get('zip_level', 6)
+        output = Path(self.opts['output'])
+        fmt    = self.opts.get('output_format', 'folder')
 
         meta = None
         if '__meta__' in files:
@@ -867,6 +866,9 @@ class Compressor:
         out_files = {k: v for k, v in files.items() if k != '__meta__'}
 
         if self.opts.get('dry_run'):
+            if self.opts.get('in_place'):
+                self.log(self.t('dry_run_would_replace', path=output))
+                return
             if fmt == 'folder':
                 self.log(self.t('dry_run_would_write_folder', path=output, n=len(out_files)))
             elif fmt == 'gma':
@@ -875,9 +877,70 @@ class Compressor:
                 self.log(self.t('dry_run_would_write_zip', path=self._resolve_output_path(output, fmt)))
             return
 
+        in_place = bool(self.opts.get('in_place'))
+        destination = output if fmt == 'folder' else self._resolve_output_path(output, fmt)
+
+        if in_place:
+            staging = self._staging_path(destination)
+            try:
+                self._write_payload(out_files, staging, fmt, meta, src)
+                self._swap_into_place(staging, destination)
+            finally:
+                self._discard(staging)
+            self.log(self.t('write_in_place', path=destination))
+            return
+
         if self.opts.get('backup_original'):
             self._backup_existing(output, fmt)
+        self._write_payload(out_files, destination, fmt, meta, src)
 
+    def _staging_path(self, destination: Path) -> Path:
+        return self._unique_path(destination.parent /
+                                 (destination.name + '.slimgma-tmp'))
+
+    @staticmethod
+    def _unique_path(candidate: Path) -> Path:
+        path, index = candidate, 1
+        while path.exists():
+            path = candidate.with_name(f"{candidate.name}{index}")
+            index += 1
+        return path
+
+    @staticmethod
+    def _discard(path: Path) -> None:
+        try:
+            if path.is_dir():
+                shutil.rmtree(path)
+            elif path.exists():
+                path.unlink()
+        except OSError:
+            pass
+
+    def _swap_into_place(self, staging: Path, destination: Path) -> None:
+        previous = None
+        if destination.exists():
+            previous = self._unique_path(
+                destination.parent / (destination.name + '.slimgma-old'))
+            os.replace(destination, previous)
+        try:
+            os.replace(staging, destination)
+        except OSError:
+            if previous is not None:
+                os.replace(previous, destination)
+            raise
+        if previous is None:
+            return
+        if self.opts.get('backup_original'):
+            kept = self._unique_path(destination.with_name(
+                f"{destination.stem}_backup_{time.strftime('%Y%m%d_%H%M%S')}"
+                f"{destination.suffix}"))
+            os.replace(previous, kept)
+            self.log(self.t('backup_created', path=kept))
+        else:
+            self._discard(previous)
+
+    def _write_payload(self, out_files: dict, destination: Path, fmt: str,
+                       meta: dict | None, src: Path) -> None:
         if fmt == 'folder':
             if 'addon.json' not in out_files and self.opts.get('gen_addon_json', True):
                 title = (meta or {}).get('name') or src.stem
@@ -889,12 +952,12 @@ class Compressor:
                 out_files['addon.json'] = json.dumps(
                     addon_info, indent=4, ensure_ascii=False).encode('utf-8')
                 self.log(self.t('addon_json_created', title=title))
-            output.mkdir(parents=True, exist_ok=True)
+            destination.mkdir(parents=True, exist_ok=True)
             for path, data in out_files.items():
-                dest = output / path
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(data)
-            self.log(self.t('write_folder', path=output))
+                target = destination / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+            self.log(self.t('write_folder', path=destination))
 
         elif fmt == 'gma':
             gma = GMAFile()
@@ -912,20 +975,17 @@ class Compressor:
                     except Exception:
                         pass
             gma.files = out_files
-            out_path = self._resolve_output_path(output, fmt)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            gma.save(str(out_path))
-            self.log(self.t('write_gma', path=out_path))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            gma.save(str(destination))
+            self.log(self.t('write_gma', path=destination))
 
         elif fmt == 'zip':
-            out_path = self._resolve_output_path(output, fmt)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(str(out_path), 'w',
-                                 zipfile.ZIP_DEFLATED,
-                                 compresslevel=zip_lvl) as zf:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(str(destination), 'w', zipfile.ZIP_DEFLATED,
+                                 compresslevel=self.opts.get('zip_level', 6)) as zf:
                 for path, data in out_files.items():
                     zf.writestr(path, data)
-            self.log(self.t('write_zip', path=out_path))
+            self.log(self.t('write_zip', path=destination))
 
     def _run_batch(self) -> None:
         src = Path(self.opts['source'])
@@ -961,7 +1021,10 @@ class Compressor:
             sub_opts['source'] = str(path)
             sub_opts['source_type'] = stype
             sub_opts['batch'] = False
-            if fmt == 'folder':
+            if self.opts.get('in_place'):
+                sub_opts['output'] = str(path)
+                sub_opts['output_format'] = 'gma' if stype == 'gma' else 'folder'
+            elif fmt == 'folder':
                 sub_opts['output'] = str(output_root / name)
             else:
                 ext = '.gma' if fmt == 'gma' else '.zip'

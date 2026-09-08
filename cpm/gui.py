@@ -360,6 +360,7 @@ class App:
         self._toggle_snd()
         self._toggle_lua()
         self._toggle_target_size()
+        self._toggle_in_place()
         self._show_page(self._page)
 
     def _build_header(self):
@@ -613,22 +614,28 @@ class App:
 
         out_card = self._card(host, self.t('card_output'), fill='x', pady=(14, 0))
 
-        row2 = tk.Frame(out_card, bg=self.CARD)
-        row2.pack(fill='x')
-        self.output_var = tk.StringVar()
-        ttk.Entry(row2, textvariable=self.output_var).pack(
-            side='left', fill='x', expand=True)
-        ttk.Button(row2, text=self.t('btn_browse'), command=self._browse_output,
-                   width=13).pack(side='right', padx=(6, 0))
+        self.in_place = tk.BooleanVar(value=False)
+        self._check(out_card, 'chk_in_place', self.in_place, 'desc_in_place',
+                    'tip_in_place', command=self._toggle_in_place, pady=(0, 10))
 
-        fmt = tk.Frame(out_card, bg=self.CARD)
-        fmt.pack(fill='x', pady=(11, 0))
-        tk.Label(fmt, text=self.t('label_output_format'), bg=self.CARD,
-                 fg=self.SUB, font=('Segoe UI', 8)).pack(side='left', padx=(0, 8))
+        self.output_row = tk.Frame(out_card, bg=self.CARD)
+        self.output_row.pack(fill='x')
+        self.output_var = tk.StringVar()
+        ttk.Entry(self.output_row, textvariable=self.output_var).pack(
+            side='left', fill='x', expand=True)
+        ttk.Button(self.output_row, text=self.t('btn_browse'),
+                   command=self._browse_output, width=13).pack(side='right',
+                                                               padx=(6, 0))
+
+        self.format_row = tk.Frame(out_card, bg=self.CARD)
+        self.format_row.pack(fill='x', pady=(11, 0))
+        tk.Label(self.format_row, text=self.t('label_output_format'),
+                 bg=self.CARD, fg=self.SUB,
+                 font=('Segoe UI', 8)).pack(side='left', padx=(0, 8))
         self.out_fmt = tk.StringVar(value='folder')
         for text, value in ((self.t('radio_folder'), 'folder'),
                             (".gma", 'gma'), (".zip", 'zip')):
-            ttk.Radiobutton(fmt, text=text, variable=self.out_fmt,
+            ttk.Radiobutton(self.format_row, text=text, variable=self.out_fmt,
                             value=value).pack(side='left', padx=(0, 14))
 
     def _draw_drop_zone(self):
@@ -1258,6 +1265,15 @@ class App:
     def _toggle_lua(self):
         self._set_sub_state(self.lua_sub, self.gen_lua.get())
 
+    def _toggle_in_place(self):
+        active = self.in_place.get()
+        self._set_sub_state(self.output_row, not active)
+        self._set_sub_state(self.format_row, not active)
+        if active:
+            source = self.source_var.get().strip()
+            self.output_var.set(source)
+            self.out_fmt.set('gma' if source.lower().endswith('.gma') else 'folder')
+
     def _toggle_target_size(self):
         self.target_size_entry.configure(
             state='normal' if self.target_size_enabled.get() else 'disabled')
@@ -1365,6 +1381,8 @@ class App:
         if not self.output_var.get():
             self.output_var.set(str(entry.parent / (entry.stem + '_compressed')))
         self._push_recent(path)
+        if self.in_place.get():
+            self._toggle_in_place()
         self._scan_source()
 
     def _push_recent(self, path: str):
@@ -1405,6 +1423,8 @@ class App:
 
     def _start(self):
         source = self.source_var.get().strip()
+        if self.in_place.get() and source:
+            self.output_var.set(source)
         output = self.output_var.get().strip()
 
         if not source:
@@ -1433,6 +1453,15 @@ class App:
                                        self.t('msg_invalid_target_size_body'))
                 return
 
+        if self.in_place.get() and not self.dry_run.get():
+            note = self.t('in_place_confirm_backup' if self.backup.get()
+                          else 'in_place_confirm_nobackup')
+            if not messagebox.askyesno(
+                    self.t('in_place_confirm_title'),
+                    self.t('in_place_confirm_body', path=source) + "\n" + note,
+                    icon='warning', default='no'):
+                return
+
         self._push_recent(source)
 
         opts = {
@@ -1459,6 +1488,7 @@ class App:
             'dry_run':           self.dry_run.get(),
             'backup_original':   self.backup.get(),
             'batch':             self.batch.get(),
+            'in_place':          self.in_place.get(),
             'lang':              self.lang,
         }
 
@@ -1950,6 +1980,7 @@ class App:
             'target_size_enabled': self.target_size_enabled.get(),
             'target_size_mb':      self.target_size_mb.get(),
             'batch':               self.batch.get(),
+            'in_place':            self.in_place.get(),
             'page':                self._page,
         }
 
@@ -1980,11 +2011,13 @@ class App:
         self.target_size_enabled.set(state.get('target_size_enabled', False))
         self.target_size_mb.set(state.get('target_size_mb', '10'))
         self.batch.set(state.get('batch', False))
+        self.in_place.set(state.get('in_place', False))
 
         self._toggle_tex()
         self._toggle_snd()
         self._toggle_lua()
         self._toggle_target_size()
+        self._toggle_in_place()
         self._scan_source()
 
     @staticmethod

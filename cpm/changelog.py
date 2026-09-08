@@ -5,6 +5,24 @@ CHANGE = 'change'
 
 RELEASES: list[dict] = [
     {
+        'version': '1.3.0',
+        'date': '2026-09-08',
+        'entries': [
+            (NEW, {
+                'fr': "Option « Remplacer l'addon d'origine » : plus besoin de choisir un dossier de destination, l'addon est compressé sur place. En ligne de commande : --in-place.",
+                'en': "New “Replace the original addon” option: no need to pick a destination folder, the addon is compressed in place. On the command line: --in-place.",
+            }),
+            (NEW, {
+                'fr': "L'addon d'origine n'est remplacé qu'une fois la version compressée entièrement prête. En cas d'erreur, rien n'est touché.",
+                'en': "The original addon is only replaced once the compressed version is fully ready. If anything fails, nothing is touched.",
+            }),
+            (FIX, {
+                'fr': "En sortie dossier, les fichiers supprimés par l'outil restaient sur le disque s'ils étaient déjà présents dans la destination.",
+                'en': "With folder output, files removed by the tool stayed on disk if they already existed in the destination.",
+            }),
+        ],
+    },
+    {
         'version': '1.2.1',
         'date': '2026-09-06',
         'entries': [
