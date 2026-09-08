@@ -20,6 +20,13 @@
 - Cochez **« Sauvegarder l'original »** pour garder une copie horodatée à côté.
 - Compatible avec le mode lot : chaque addon du dossier est remplacé chez lui.
 - Le mode aperçu ne touche à rien, comme partout ailleurs.
+- **Message clair si le dossier est verrouillé** — le cas le plus probable sous
+  Windows, quand l'explorateur, un antivirus ou Garry's Mod garde le dossier
+  ouvert. L'outil dit quoi fermer et rappelle que l'addon n'a pas été touché,
+  au lieu d'afficher `[Errno 13]` et un traceback Python. Si l'original se
+  retrouvait bloqué sous un nom temporaire, son chemin exact est indiqué.
+- Le journal n'affiche plus le dossier de transit, qui laissait croire que la
+  sortie avait été écrite ailleurs.
 
 ## 1.2.1 — 2026-09-06
 

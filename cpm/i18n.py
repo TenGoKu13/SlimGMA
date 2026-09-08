@@ -70,6 +70,9 @@ STRINGS: dict[str, dict[str, str]] = {
 
     'addon_json_created': {'fr': "  ✓ addon.json créé (requis par gmad) : {title}", 'en': "  ✓ addon.json created (required by gmad): {title}"},
 
+    'err_in_place_busy':      {'fr': "✗ ERREUR : impossible de remplacer {path} — le dossier est utilisé par un autre programme. Fermez l'explorateur Windows, Garry's Mod ou tout logiciel ouvert dessus, puis réessayez. Votre addon n'a pas été touché.\n   Détail : {e}", 'en': "✗ ERROR: cannot replace {path} — the folder is in use by another program. Close Windows Explorer, Garry's Mod or anything holding it open, then try again. Your addon was not touched.\n   Details: {e}"},
+    'err_in_place_stranded':  {'fr': "✗ ERREUR : le remplacement a échoué et votre addon d'origine se trouve maintenant dans {path}. Renommez ce dossier pour le remettre en place.", 'en': "✗ ERROR: the replacement failed and your original addon now sits in {path}. Rename that folder to put it back."},
+    'err_in_place_leftover':  {'fr': "  ⚠ L'ancienne version n'a pas pu être supprimée, elle reste dans {path}. Vous pouvez l'effacer à la main.", 'en': "  ⚠ The old version could not be deleted, it remains in {path}. You can remove it by hand."},
     'write_in_place':  {'fr': "  ✓ Addon remplacé sur place : {path}", 'en': "  ✓ Addon replaced in place: {path}"},
     'write_folder': {'fr': "  Dossier : {path}/", 'en': "  Folder: {path}/"},
     'write_gma':    {'fr': "  GMA : {path}", 'en': "  GMA: {path}"},

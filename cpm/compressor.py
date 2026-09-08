@@ -29,6 +29,10 @@ from .analysis import (
 )
 
 
+class CompressionAborted(Exception):
+    pass
+
+
 class Compressor:
     TOTAL_STEPS = 7
 
@@ -172,6 +176,10 @@ class Compressor:
             else:
                 self.log(self.t('cancelled'))
                 self.set_status(self.t('status_cancelled'))
+
+        except CompressionAborted as stop:
+            self.log(str(stop))
+            self.set_status(self.t('status_error'))
 
         except Exception as e:
             import traceback
@@ -883,7 +891,7 @@ class Compressor:
         if in_place:
             staging = self._staging_path(destination)
             try:
-                self._write_payload(out_files, staging, fmt, meta, src)
+                self._write_payload(out_files, staging, fmt, meta, src, quiet=True)
                 self._swap_into_place(staging, destination)
             finally:
                 self._discard(staging)
@@ -907,27 +915,37 @@ class Compressor:
         return path
 
     @staticmethod
-    def _discard(path: Path) -> None:
+    def _discard(path: Path) -> bool:
         try:
             if path.is_dir():
                 shutil.rmtree(path)
             elif path.exists():
                 path.unlink()
         except OSError:
-            pass
+            return False
+        return True
 
     def _swap_into_place(self, staging: Path, destination: Path) -> None:
         previous = None
         if destination.exists():
             previous = self._unique_path(
                 destination.parent / (destination.name + '.slimgma-old'))
-            os.replace(destination, previous)
+            try:
+                os.replace(destination, previous)
+            except OSError as error:
+                raise CompressionAborted(
+                    self.t('err_in_place_busy', path=destination, e=error))
         try:
             os.replace(staging, destination)
-        except OSError:
+        except OSError as error:
             if previous is not None:
-                os.replace(previous, destination)
-            raise
+                try:
+                    os.replace(previous, destination)
+                except OSError:
+                    raise CompressionAborted(
+                        self.t('err_in_place_stranded', path=previous))
+            raise CompressionAborted(
+                self.t('err_in_place_busy', path=destination, e=error))
         if previous is None:
             return
         if self.opts.get('backup_original'):
@@ -936,11 +954,11 @@ class Compressor:
                 f"{destination.suffix}"))
             os.replace(previous, kept)
             self.log(self.t('backup_created', path=kept))
-        else:
-            self._discard(previous)
+        elif not self._discard(previous):
+            self.log(self.t('err_in_place_leftover', path=previous))
 
     def _write_payload(self, out_files: dict, destination: Path, fmt: str,
-                       meta: dict | None, src: Path) -> None:
+                       meta: dict | None, src: Path, quiet: bool = False) -> None:
         if fmt == 'folder':
             if 'addon.json' not in out_files and self.opts.get('gen_addon_json', True):
                 title = (meta or {}).get('name') or src.stem
@@ -957,7 +975,8 @@ class Compressor:
                 target = destination / path
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
-            self.log(self.t('write_folder', path=destination))
+            if not quiet:
+                self.log(self.t('write_folder', path=destination))
 
         elif fmt == 'gma':
             gma = GMAFile()
@@ -977,7 +996,8 @@ class Compressor:
             gma.files = out_files
             destination.parent.mkdir(parents=True, exist_ok=True)
             gma.save(str(destination))
-            self.log(self.t('write_gma', path=destination))
+            if not quiet:
+                self.log(self.t('write_gma', path=destination))
 
         elif fmt == 'zip':
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -985,7 +1005,8 @@ class Compressor:
                                  compresslevel=self.opts.get('zip_level', 6)) as zf:
                 for path, data in out_files.items():
                     zf.writestr(path, data)
-            self.log(self.t('write_zip', path=destination))
+            if not quiet:
+                self.log(self.t('write_zip', path=destination))
 
     def _run_batch(self) -> None:
         src = Path(self.opts['source'])

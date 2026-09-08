@@ -127,3 +127,70 @@ def test_normal_mode_still_writes_beside_the_source(tmp_path):
     assert compressor.final_size is not None
     assert output.is_dir()
     assert 'lisezmoi.txt' in listing(addon)
+
+
+def test_locked_folder_gives_a_readable_error(tmp_path, monkeypatch):
+    addon = make_addon(tmp_path / 'addon')
+    before = {name: (addon / name).read_bytes() for name in listing(addon)}
+    messages = []
+
+    def locked(source, destination):
+        raise PermissionError(13, "utilisé par un autre processus")
+
+    monkeypatch.setattr(os, 'replace', locked)
+    opts = {'source': str(addon), 'output': str(addon), 'in_place': True,
+            'output_format': 'folder', 'lang': 'fr', 'compress_textures': False,
+            'check_materials': False, 'gen_lua': False}
+    compressor = Compressor(opts, log_fn=messages.append,
+                            progress_fn=lambda *_: None, status_fn=lambda *_: None)
+    compressor.run()
+
+    assert compressor.final_size is None
+    joined = "\n".join(messages)
+    assert "utilisé par un autre programme" in joined
+    assert "n'a pas été touché" in joined
+    assert "Traceback" not in joined
+    assert {name: (addon / name).read_bytes() for name in listing(addon)} == before
+
+
+def test_a_stranded_original_is_reported_with_its_path(tmp_path, monkeypatch):
+    addon = make_addon(tmp_path / 'addon')
+    messages = []
+    real_replace = os.replace
+    calls = {'count': 0}
+
+    def flaky(source, destination):
+        calls['count'] += 1
+        if calls['count'] >= 2:
+            raise OSError("panne")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(os, 'replace', flaky)
+    opts = {'source': str(addon), 'output': str(addon), 'in_place': True,
+            'output_format': 'folder', 'lang': 'fr', 'compress_textures': False,
+            'check_materials': False, 'gen_lua': False}
+    compressor = Compressor(opts, log_fn=messages.append,
+                            progress_fn=lambda *_: None, status_fn=lambda *_: None)
+    compressor.run()
+
+    joined = "\n".join(messages)
+    assert compressor.final_size is None
+    assert 'slimgma-old' in joined
+    assert "Traceback" not in joined
+    stranded = [p for p in tmp_path.iterdir() if 'slimgma-old' in p.name]
+    assert len(stranded) == 1
+    assert 'lisezmoi.txt' in listing(stranded[0])
+
+
+def test_in_place_log_does_not_mention_the_staging_folder(tmp_path):
+    addon = make_addon(tmp_path / 'addon')
+    messages = []
+    opts = {'source': str(addon), 'output': str(addon), 'in_place': True,
+            'output_format': 'folder', 'lang': 'fr', 'compress_textures': False,
+            'check_materials': False, 'gen_lua': False}
+    Compressor(opts, log_fn=messages.append, progress_fn=lambda *_: None,
+               status_fn=lambda *_: None).run()
+
+    joined = "\n".join(messages)
+    assert 'slimgma-tmp' not in joined
+    assert 'remplacé sur place' in joined
