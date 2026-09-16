@@ -79,9 +79,20 @@ lesquelles sont en double, et lesquelles posent problème.
 
 ### La façon simple (Windows)
 
-**[⬇ Télécharger la dernière version](https://github.com/TenGoKu13/SlimGMA/releases/latest)**
+**[⬇ Télécharger Slimgma.exe](https://github.com/TenGoKu13/SlimGMA/releases/latest/download/Slimgma.exe)**
 
-Un seul fichier `.exe`, rien à installer. Double-cliquez, c'est parti.
+Un seul fichier, rien à installer. Double-cliquez, c'est parti. Vous pouvez le
+poser où vous voulez — bureau, clé USB, dossier de l'addon.
+
+*(le lien pointe toujours vers la dernière version ; la liste complète est sur
+la [page des releases](https://github.com/TenGoKu13/SlimGMA/releases))*
+
+> **Windows affiche « Windows a protégé votre ordinateur » ?**
+> C'est normal : le fichier n'est pas signé (une signature coûte ~300 €/an).
+> Cliquez sur *Informations complémentaires* puis *Exécuter quand même*.
+> Si vous préférez ne pas faire confiance à un `.exe` — ce qui est un réflexe
+> sain — installez depuis les sources juste en dessous : c'est le même code,
+> et vous pouvez le lire.
 
 ### Depuis les sources (Windows, Linux, macOS)
 
