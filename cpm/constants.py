@@ -6,7 +6,7 @@ from pathlib import Path
 APP_NAME = "Slimgma"
 VERSION = "1.3.0"
 LICENSE_NAME = "MIT"
-REPO_URL = "https://github.com/TenGoKu13/Compressez-PM-gmod"
+REPO_URL = "https://github.com/TenGoKu13/SlimGMA"
 
 LEGACY_CONFIG_DIR = 'CompressezPMGMod'
 

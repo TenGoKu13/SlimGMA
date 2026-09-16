@@ -8,8 +8,8 @@ Votre playermodel pèse 200 Mo ? Il peut peser 20. Un outil gratuit qui allège
 vos addons **Playermodel**, sans les casser et sans que ça se voie en jeu.
 
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
-[![Tests](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml/badge.svg)](https://github.com/TenGoKu13/Compressez-PM-gmod/actions/workflows/build.yml)
-[![Téléchargement](https://img.shields.io/github/v/release/TenGoKu13/Compressez-PM-gmod?label=t%C3%A9l%C3%A9charger&color=success)](https://github.com/TenGoKu13/Compressez-PM-gmod/releases/latest)
+[![Tests](https://github.com/TenGoKu13/SlimGMA/actions/workflows/build.yml/badge.svg)](https://github.com/TenGoKu13/SlimGMA/actions/workflows/build.yml)
+[![Téléchargement](https://img.shields.io/github/v/release/TenGoKu13/SlimGMA?label=t%C3%A9l%C3%A9charger&color=success)](https://github.com/TenGoKu13/SlimGMA/releases/latest)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 <img src="docs/images/source.png" width="820" alt="La fenêtre principale de Slimgma">
@@ -79,15 +79,15 @@ lesquelles sont en double, et lesquelles posent problème.
 
 ### La façon simple (Windows)
 
-**[⬇ Télécharger la dernière version](https://github.com/TenGoKu13/Compressez-PM-gmod/releases/latest)**
+**[⬇ Télécharger la dernière version](https://github.com/TenGoKu13/SlimGMA/releases/latest)**
 
 Un seul fichier `.exe`, rien à installer. Double-cliquez, c'est parti.
 
 ### Depuis les sources (Windows, Linux, macOS)
 
 ```bash
-git clone https://github.com/TenGoKu13/Compressez-PM-gmod.git
-cd Compressez-PM-gmod
+git clone https://github.com/TenGoKu13/SlimGMA.git
+cd SlimGMA
 pip install -r requirements.txt
 python slimgma.py
 ```
@@ -220,13 +220,13 @@ source output               Chemins source et sortie (sortie facultative
 
 ## Un problème ? Une idée ?
 
-[Ouvrez un ticket](https://github.com/TenGoKu13/Compressez-PM-gmod/issues) — et
+[Ouvrez un ticket](https://github.com/TenGoKu13/SlimGMA/issues) — et
 si la compression s'est mal passée, joignez le journal (onglet *Journal* →
 bouton 💾 *Enregistrer*), ça aide énormément.
 
 Vous voulez contribuer du code ? Tout est expliqué dans
 **[CONTRIBUTING.md](CONTRIBUTING.md)**, et les tickets marqués
-[`good first issue`](https://github.com/TenGoKu13/Compressez-PM-gmod/labels/good%20first%20issue)
+[`good first issue`](https://github.com/TenGoKu13/SlimGMA/labels/good%20first%20issue)
 sont faits pour démarrer.
 
 <details>

@@ -36,9 +36,9 @@ vtf = ["srctools>=2.7.0"]
 dev = ["pytest>=7.0.0"]
 
 [project.urls]
-Homepage = "https://github.com/TenGoKu13/Compressez-PM-gmod"
-Issues = "https://github.com/TenGoKu13/Compressez-PM-gmod/issues"
-Changelog = "https://github.com/TenGoKu13/Compressez-PM-gmod/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/TenGoKu13/SlimGMA"
+Issues = "https://github.com/TenGoKu13/SlimGMA/issues"
+Changelog = "https://github.com/TenGoKu13/SlimGMA/blob/main/CHANGELOG.md"
 
 [project.scripts]
 slimgma = "cpm.cli:cli_main"

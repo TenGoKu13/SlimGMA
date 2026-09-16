@@ -5,7 +5,7 @@ toute contribution est la bienvenue, du signalement de bug à la traduction.
 
 ## Signaler un bug
 
-Ouvrez une [issue](https://github.com/TenGoKu13/Compressez-PM-gmod/issues) en
+Ouvrez une [issue](https://github.com/TenGoKu13/SlimGMA/issues) en
 précisant :
 
 - votre système (Windows / Linux / macOS) et la version de l'outil ;
@@ -16,8 +16,8 @@ précisant :
 ## Proposer un changement
 
 ```bash
-git clone https://github.com/TenGoKu13/Compressez-PM-gmod.git
-cd Compressez-PM-gmod
+git clone https://github.com/TenGoKu13/SlimGMA.git
+cd SlimGMA
 pip install -r requirements-dev.txt
 python -m pytest -q
 ```
