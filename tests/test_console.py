@@ -67,12 +67,17 @@ def test_help_reaches_the_reopened_stream(monkeypatch):
     assert '--in-place' in captured.getvalue()
 
 
-def test_swallowed_output_without_the_fallback(monkeypatch):
-    monkeypatch.setattr(sys, 'argv', ['Slimgma.exe', '--help'])
+def test_a_cli_error_reaches_the_reopened_stream(monkeypatch):
+    captured = io.StringIO()
+    monkeypatch.setattr(slimgma, '_open_console_stream', lambda: captured)
+    monkeypatch.setattr(sys, 'argv', ['Slimgma.exe', '--option-inconnue'])
     monkeypatch.setattr(sys, 'stdout', None)
     monkeypatch.setattr(sys, 'stderr', None)
+
+    slimgma.attach_console()
 
     with pytest.raises(SystemExit) as exit_info:
         cli_main()
 
-    assert exit_info.value.code == 0
+    assert exit_info.value.code != 0
+    assert 'slimgma: error:' in captured.getvalue()

@@ -71,6 +71,7 @@ jobs:
         with:
           name: livraison
           path: livraison/*
+          retention-days: 1
 
   publish:
     needs: build

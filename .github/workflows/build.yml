@@ -67,9 +67,11 @@ jobs:
         with:
           name: Slimgma-portable
           path: portable/Slimgma.exe
+          retention-days: 7
 
       - name: Upload de l'installateur
         uses: actions/upload-artifact@v7
         with:
           name: Slimgma-installateur
           path: dist/Slimgma-Setup-*.exe
+          retention-days: 7
