@@ -20,6 +20,16 @@ def _config_base() -> Path:
 CONFIG_PATH = _config_base() / APP_NAME / 'config.json'
 LEGACY_CONFIG_PATH = _config_base() / LEGACY_CONFIG_DIR / 'config.json'
 
+
+def resource_path(*parts: str) -> Path:
+    bundled = getattr(sys, '_MEIPASS', None)
+    base = Path(bundled) if bundled else Path(__file__).resolve().parent.parent
+    return base.joinpath(*parts)
+
+
+ICON_PATH = resource_path('assets', 'slimgma.ico')
+ICON_PNG_PATH = resource_path('assets', 'slimgma.png')
+
 CHAND_PATTERNS = [
     r"models/weapons/c_.*",
     r"materials/models/weapons/c_.*",

@@ -9,6 +9,18 @@ RELEASES: list[dict] = [
         'date': '2026-09-08',
         'entries': [
             (NEW, {
+                'fr': "Slimgma s'installe maintenant comme un vrai logiciel : un programme d'installation, un raccourci dans le menu Démarrer, et une désinstallation propre depuis « Applications installées ». Aucun droit administrateur requis.",
+                'en': "Slimgma now installs like real software: an installer, a Start Menu shortcut, and a clean uninstall from “Installed apps”. No administrator rights needed.",
+            }),
+            (NEW, {
+                'fr': "La version portable en un seul fichier reste disponible pour une clé USB ou un PC où vous ne voulez rien laisser.",
+                'en': "The single-file portable build is still available, for a USB stick or a PC where you want to leave nothing behind.",
+            }),
+            (CHANGE, {
+                'fr': "L'application a enfin une icône, sur l'exécutable, les raccourcis et la fenêtre.",
+                'en': "The app finally has an icon, on the executable, the shortcuts and the window.",
+            }),
+            (NEW, {
                 'fr': "Option « Remplacer l'addon d'origine » : plus besoin de choisir un dossier de destination, l'addon est compressé sur place. En ligne de commande : --in-place.",
                 'en': "New “Replace the original addon” option: no need to pick a destination folder, the addon is compressed in place. On the command line: --in-place.",
             }),

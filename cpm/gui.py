@@ -24,7 +24,7 @@ except ImportError:
 from .deps import PIL_AVAILABLE, SRCTOOLS_AVAILABLE, FFMPEG_AVAILABLE
 from .constants import (
     APP_NAME, VERSION, LICENSE_NAME, REPO_URL, CONFIG_PATH, LEGACY_CONFIG_PATH,
-    TEXTURE_EXTENSIONS, SOUND_EXTENSIONS,
+    ICON_PATH, ICON_PNG_PATH, TEXTURE_EXTENSIONS, SOUND_EXTENSIONS,
 )
 from .i18n import t
 from .changelog import RELEASES, releases_since
@@ -189,6 +189,7 @@ class App:
         self.root.configure(bg=self.BG)
         self.root.minsize(880, 620)
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
+        self._apply_window_icon()
 
         self._seen_version = saved.get('seen_version',
                                        '0.0.0' if saved else VERSION)
@@ -222,6 +223,21 @@ class App:
     def _apply_palette(self):
         for k, v in THEMES[self.theme_name].items():
             setattr(self, k, v)
+
+    def _apply_window_icon(self):
+        self._icon_image = None
+        if ICON_PATH.is_file():
+            try:
+                self.root.iconbitmap(default=str(ICON_PATH))
+                return
+            except tk.TclError:
+                pass
+        if ICON_PNG_PATH.is_file():
+            try:
+                self._icon_image = tk.PhotoImage(file=str(ICON_PNG_PATH))
+                self.root.iconphoto(True, self._icon_image)
+            except tk.TclError:
+                self._icon_image = None
 
     def _profile_label(self, pid: str) -> str:
         return self.t(f'profile_{pid}')

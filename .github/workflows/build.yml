@@ -45,11 +45,31 @@ jobs:
       - name: Installer les dépendances
         run: python -m pip install pyinstaller -r requirements.txt
 
-      - name: Construire le .exe
-        run: python -m PyInstaller --onefile --windowed --name "Slimgma" --collect-all tkinterdnd2 --collect-all srctools slimgma.py
+      - name: Construire le .exe portable
+        run: >
+          python -m PyInstaller --noconfirm --onefile --windowed
+          --name "Slimgma" --icon assets/slimgma.ico
+          --add-data "assets/slimgma.ico;assets"
+          --collect-all tkinterdnd2 --collect-all srctools slimgma.py
 
-      - name: Upload artifact
+      - name: Mettre le portable de côté
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force portable | Out-Null
+          Move-Item dist/Slimgma.exe portable/Slimgma.exe
+
+      - name: Construire le programme d'installation
+        shell: pwsh
+        run: ./.github/scripts/build-installer.ps1
+
+      - name: Upload du .exe portable
         uses: actions/upload-artifact@v7
         with:
-          name: Slimgma-EXE
-          path: dist/Slimgma.exe
+          name: Slimgma-portable
+          path: portable/Slimgma.exe
+
+      - name: Upload de l'installateur
+        uses: actions/upload-artifact@v7
+        with:
+          name: Slimgma-installateur
+          path: dist/Slimgma-Setup-*.exe

@@ -224,3 +224,28 @@ def test_in_place_asks_before_overwriting(app, tmp_path, monkeypatch):
     assert asked['count'] == 1
     assert app._thread is None
     assert (source / 'lisezmoi.txt').exists()
+
+
+def test_window_carries_the_app_icon(app):
+    assert app._icon_image is not None
+    assert app._icon_image.width() > 0
+
+
+def test_window_still_opens_without_any_icon_file(tmp_path, monkeypatch):
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path / 'config'))
+    monkeypatch.setenv('APPDATA', str(tmp_path / 'config'))
+    import cpm.gui as gui_module
+    missing = tmp_path / 'introuvable'
+    monkeypatch.setattr(gui_module, 'ICON_PATH', missing / 'slimgma.ico')
+    monkeypatch.setattr(gui_module, 'ICON_PNG_PATH', missing / 'slimgma.png')
+    monkeypatch.setattr(gui_module, 'CONFIG_PATH',
+                        tmp_path / 'config' / 'cpm.json')
+
+    instance = gui_module.App()
+    try:
+        assert instance._icon_image is None
+        assert instance.root.winfo_exists()
+    finally:
+        instance._stop_pump()
+        instance._stop_timer()
+        instance.root.destroy()

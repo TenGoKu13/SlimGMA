@@ -1,13 +1,13 @@
 @echo off
 echo ============================================
-echo   Slimgma - Build .exe
+echo   Slimgma - Build du .exe portable
 echo ============================================
 echo.
 
 python --version >nul 2>&1
 if errorlevel 1 (
     echo ERREUR : Python introuvable.
-    echo Telecharge Python 3.9+ sur https://www.python.org
+    echo Telecharge Python 3.10+ sur https://www.python.org
     pause
     exit /b 1
 )
@@ -21,7 +21,7 @@ if errorlevel 1 (
 )
 
 echo [2/3] Construction de l'executable...
-python -m PyInstaller --onefile --windowed --name "Slimgma" --collect-all tkinterdnd2 --collect-all srctools slimgma.py
+python -m PyInstaller --noconfirm --onefile --windowed --name "Slimgma" --icon assets\slimgma.ico --add-data "assets\slimgma.ico;assets" --collect-all tkinterdnd2 --collect-all srctools slimgma.py
 if errorlevel 1 (
     echo ERREUR lors de la construction.
     pause
@@ -34,8 +34,11 @@ del /q "Slimgma.spec" 2>nul
 
 echo.
 echo ============================================
-echo   OK ! Executable cree :
+echo   OK ! Executable portable cree :
 echo   dist\Slimgma.exe
+echo.
+echo   Pour un vrai programme d'installation :
+echo   packaging\build_installer.bat
 echo ============================================
 echo.
 pause

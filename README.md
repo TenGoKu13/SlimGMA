@@ -77,22 +77,37 @@ lesquelles sont en double, et lesquelles posent problème.
 
 ## Installation
 
-### La façon simple (Windows)
+### La façon normale (Windows)
+
+**[⬇ Télécharger le programme d'installation](https://github.com/TenGoKu13/SlimGMA/releases/latest)**
+
+Prenez le fichier `Slimgma-Setup-x.y.z.exe`, lancez-le, suivez les trois
+écrans. Comme n'importe quel logiciel :
+
+- **pas de demande d'administrateur** — Slimgma s'installe dans votre compte,
+  pas dans le système ;
+- **un raccourci dans le menu Démarrer** (et sur le Bureau si vous le
+  cochez) ;
+- **une entrée dans *Paramètres → Applications installées*** pour le
+  **désinstaller** proprement, ou le mettre à jour en réinstallant par-dessus ;
+- à la désinstallation, il vous demande si vous voulez **garder vos réglages**
+  (langue, thème, derniers dossiers) au cas où vous réinstalleriez plus tard.
+
+### La façon portable (Windows)
 
 **[⬇ Télécharger Slimgma.exe](https://github.com/TenGoKu13/SlimGMA/releases/latest/download/Slimgma.exe)**
 
-Un seul fichier, rien à installer. Double-cliquez, c'est parti. Vous pouvez le
-poser où vous voulez — bureau, clé USB, dossier de l'addon.
-
-*(le lien pointe toujours vers la dernière version ; la liste complète est sur
-la [page des releases](https://github.com/TenGoKu13/SlimGMA/releases))*
+Un seul fichier, rien d'installé, rien dans le registre. Posez-le où vous
+voulez — bureau, clé USB, dossier de l'addon. Pratique sur un PC qui n'est pas
+le vôtre. En échange, il démarre un peu plus lentement et vous devrez le
+retélécharger à chaque mise à jour.
 
 > **Windows affiche « Windows a protégé votre ordinateur » ?**
-> C'est normal : le fichier n'est pas signé (une signature coûte ~300 €/an).
-> Cliquez sur *Informations complémentaires* puis *Exécuter quand même*.
-> Si vous préférez ne pas faire confiance à un `.exe` — ce qui est un réflexe
-> sain — installez depuis les sources juste en dessous : c'est le même code,
-> et vous pouvez le lire.
+> C'est normal, et ça arrivera avec les deux fichiers : ils ne sont pas signés
+> (un certificat coûte ~300 €/an). Cliquez sur *Informations complémentaires*
+> puis *Exécuter quand même*. Si vous préférez ne pas faire confiance à un
+> `.exe` — ce qui est un réflexe sain — installez depuis les sources juste en
+> dessous : c'est le même code, et vous pouvez le lire.
 
 ### Depuis les sources (Windows, Linux, macOS)
 
@@ -273,8 +288,29 @@ cpm/
 ├── gui.py          Interface graphique tkinter
 └── cli.py          Point d'entrée ligne de commande
 tools/
-└── check_no_comments.py   Vérification du style du dépôt (CI)
+├── check_no_comments.py   Vérification du style du dépôt (CI)
+└── make_icon.py           Génération de assets/slimgma.ico
+packaging/
+├── slimgma.iss            Programme d'installation (Inno Setup)
+└── build_installer.bat    Construction locale de l'installateur
+assets/
+└── slimgma.ico            Icône de l'exécutable, des raccourcis et de la fenêtre
 ```
+
+### Construire les exécutables soi-même
+
+```bat
+build.bat                          :: le .exe portable (un fichier)
+packaging\build_installer.bat      :: le programme d'installation
+```
+
+Le premier a besoin de Python 3.10+. Le second a besoin en plus d'
+[Inno Setup 6](https://jrsoftware.org/isdl.php)
+(`winget install JRSoftware.InnoSetup`). Les deux scripts lisent le numéro de
+version dans `cpm/constants.py`, il n'y a donc rien à tenir à jour ailleurs.
+
+La CI construit les deux à chaque push, et un tag `vX.Y.Z` les publie
+automatiquement en release.
 
 ### Tests
 

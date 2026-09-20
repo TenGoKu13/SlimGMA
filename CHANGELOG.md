@@ -2,6 +2,32 @@
 
 ## 1.3.0 — 2026-09-08
 
+### Un vrai programme, qui s'installe et se désinstalle
+- **Programme d'installation** `Slimgma-Setup-x.y.z.exe` (Inno Setup) : trois
+  écrans, en français ou en anglais, et Slimgma est installé.
+- **Aucun droit administrateur** — l'installation se fait dans le compte de
+  l'utilisateur, donc pas d'invite UAC à accepter.
+- **Raccourci dans le menu Démarrer**, et sur le Bureau si la case est cochée.
+- **Désinstallation propre** depuis *Paramètres → Applications installées*, ou
+  mise à jour en réinstallant par-dessus : l'identifiant d'application est
+  fixe, donc Windows remplace la version en place au lieu d'en empiler une
+  seconde.
+- À la désinstallation, l'outil **demande s'il faut garder vos réglages**
+  (langue, thème, derniers dossiers) au cas où vous réinstalleriez plus tard.
+- **La version portable ne disparaît pas** : `Slimgma.exe` en un seul fichier
+  reste publié à chaque release, pour une clé USB ou un PC d'emprunt.
+- L'application installée est dépaquetée sur le disque au lieu de se
+  décompresser dans un dossier temporaire à chaque lancement : **elle démarre
+  nettement plus vite** que la version portable.
+- **Une icône**, enfin — sur l'exécutable, sur les raccourcis, dans la barre
+  des tâches et sur la fenêtre. Elle est générée par `tools/make_icon.py`,
+  donc modifiable sans logiciel de dessin.
+- Le mode ligne de commande d'un build `--windowed` **écrit à nouveau dans le
+  terminal** : `Slimgma.exe --help` se rattache à la console parente au lieu
+  d'envoyer sa sortie dans le vide.
+- La CI construit l'installateur **à chaque push**, et vérifie que le tag
+  publié correspond bien à la version annoncée dans `cpm/constants.py`.
+
 ### Compresser l'addon sur place
 - Nouvelle option **« Remplacer l'addon d'origine »** : plus besoin de choisir
   un dossier de destination, l'addon source est remplacé par sa version
