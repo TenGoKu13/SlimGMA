@@ -1,0 +1,61 @@
+name: Signaler un bug
+description: Une compression échoue, plante ou produit un addon cassé
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Ce qui se passe
+      description: Décrivez le problème et ce que vous attendiez à la place.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      placeholder: |
+        1. Source : dossier / fichier .gma
+        2. Options cochées : …
+        3. Format de sortie : dossier / .gma / .zip
+        4. Résultat obtenu
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Journal
+      description: >
+        Onglet Journal → bouton 💾 Enregistrer, puis collez le contenu ici.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Version de l'outil
+      placeholder: "1.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Système
+      options:
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Mode d'installation
+      options:
+        - Exécutable .exe
+        - Sources Python (GUI)
+        - Sources Python (CLI)
+    validations:
+      required: true
