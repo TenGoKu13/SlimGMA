@@ -1,0 +1,25 @@
+name: Proposer une amélioration
+description: Une option, un format ou une optimisation qui manque
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Le besoin
+      description: Quel problème concret cette amélioration résoudrait-elle ?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: L'idée
+      description: Comment vous l'imaginez dans l'interface ou en ligne de commande.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Contournements essayés
+      description: Autres outils ou réglages déjà tentés, et pourquoi ils ne suffisent pas.
