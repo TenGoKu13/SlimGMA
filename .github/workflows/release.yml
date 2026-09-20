@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -28,6 +28,7 @@ jobs:
         run: python -m pip install pyinstaller -r requirements.txt
 
       - name: Vérifier que le tag correspond à la version de l'app
+        id: version
         shell: pwsh
         run: |
           $tag = "${{ github.event.inputs.tag || github.ref_name }}"
@@ -36,6 +37,8 @@ jobs:
             throw "Tag $tag mais cpm/constants.py annonce $expected — mettez les deux d'accord avant de publier."
           }
           Write-Host "Tag $tag = version $expected"
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$expected" >> $env:GITHUB_OUTPUT
 
       - name: Construire le .exe portable
         run: >
@@ -65,56 +68,21 @@ jobs:
 
       - name: Rassembler la livraison
         shell: pwsh
-        run: Move-Item dist/Slimgma-Setup-*.exe livraison/
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: livraison
-          path: livraison/*
-          retention-days: 1
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: livraison
-          path: livraison
-
-      - name: Extraire les notes de version
-        id: notes
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          VERSION="${TAG#v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          python - "$VERSION" <<'PY' > notes.md
-          import re, sys
-          version = sys.argv[1]
-          text = open('CHANGELOG.md', encoding='utf-8').read()
-          pattern = rf"^## {re.escape(version)}\b.*?$(.*?)(?=^## |\Z)"
-          found = re.search(pattern, text, re.S | re.M)
-          body = (found.group(1).strip() if found
-                  else f"Voir CHANGELOG.md pour la version {version}.")
-          print("## Télécharger\n")
-          print(f"- **`Slimgma-Setup-{version}.exe`** — le programme "
-                "d'installation. Raccourci dans le menu Démarrer, "
-                "désinstallation depuis *Applications installées*. "
-                "C'est celui qu'il vous faut.")
-          print("- `Slimgma.exe` — la version portable, un seul fichier, "
-                "rien d'installé. Pour une clé USB ou un PC où vous ne "
-                "voulez rien laisser.\n")
-          print("---\n")
-          print(body)
-          PY
+          Move-Item dist/Slimgma-Setup-*.exe livraison/
+          Get-ChildItem livraison | Format-Table Name, Length
+
+      - name: Rédiger les notes de version
+        shell: pwsh
+        run: >
+          python .github/scripts/release_notes.py
+          "${{ steps.version.outputs.version }}" CHANGELOG.md notes.md
 
       - name: Créer la release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.notes.outputs.tag }}
-          name: Slimgma ${{ steps.notes.outputs.tag }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Slimgma ${{ steps.version.outputs.tag }}
           body_path: notes.md
           files: livraison/*
           draft: false

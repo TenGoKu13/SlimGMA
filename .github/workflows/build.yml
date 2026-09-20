@@ -68,6 +68,7 @@ jobs:
           name: Slimgma-portable
           path: portable/Slimgma.exe
           retention-days: 7
+        continue-on-error: true
 
       - name: Upload de l'installateur
         uses: actions/upload-artifact@v7
@@ -75,3 +76,4 @@ jobs:
           name: Slimgma-installateur
           path: dist/Slimgma-Setup-*.exe
           retention-days: 7
+        continue-on-error: true

@@ -7,12 +7,17 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent
+                       / '.github' / 'scripts'))
+
+import release_notes
 from cpm.constants import APP_NAME, VERSION
 
 ISS = ROOT / 'packaging' / 'slimgma.iss'
 INSTALLER_SCRIPT = ROOT / '.github' / 'scripts' / 'build-installer.ps1'
 BUILD_WORKFLOW = ROOT / '.github' / 'workflows' / 'build.yml'
 RELEASE_WORKFLOW = ROOT / '.github' / 'workflows' / 'release.yml'
+RELEASE_NOTES = ROOT / '.github' / 'scripts' / 'release_notes.py'
 
 BUILD_OUTPUTS = {'LICENSE.txt'}
 
@@ -92,3 +97,47 @@ def test_the_install_needs_no_administrator():
 @pytest.mark.parametrize('language', ['French.isl', 'compiler:Default.isl'])
 def test_both_languages_are_offered(language):
     assert language in iss_text()
+
+
+def test_the_release_builds_and_publishes_in_one_job():
+    text = RELEASE_WORKFLOW.read_text(encoding='utf-8')
+    assert 'upload-artifact' not in text
+    assert 'download-artifact' not in text
+    assert 'action-gh-release' in text
+
+
+def test_the_release_notes_script_is_wired_in():
+    assert RELEASE_NOTES.is_file()
+    assert 'release_notes.py' in RELEASE_WORKFLOW.read_text(encoding='utf-8')
+
+
+def test_the_notes_carry_the_changelog_section():
+    changelog = (
+        "# Changelog\n\n"
+        "## 9.9.9 — 2026-01-01\n\n"
+        "- une nouveauté\n\n"
+        "## 9.9.8 — 2025-12-01\n\n"
+        "- du vieux\n")
+
+    notes = release_notes.notes_for('9.9.9', changelog)
+
+    assert '- une nouveauté' in notes
+    assert 'du vieux' not in notes
+    assert 'Slimgma-Setup-9.9.9.exe' in notes
+    assert 'Slimgma.exe' in notes
+
+
+def test_the_notes_fall_back_when_the_version_is_absent():
+    notes = release_notes.notes_for('4.5.6', "# Changelog\n\n## 1.0.0\n\n- x\n")
+
+    assert 'CHANGELOG.md' in notes
+    assert '- x' not in notes
+
+
+def test_the_notes_hold_the_real_changelog_for_this_version():
+    changelog = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+
+    notes = release_notes.notes_for(VERSION, changelog)
+
+    assert f'Slimgma-Setup-{VERSION}.exe' in notes
+    assert 'Voir CHANGELOG.md' not in notes
