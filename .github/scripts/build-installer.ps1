@@ -1,17 +1,29 @@
+param(
+  [switch]$SkipBuild,
+  [switch]$SkipCompile
+)
+
 $ErrorActionPreference = 'Stop'
 
 $version = (python -c "from cpm.constants import VERSION; print(VERSION)").Trim()
 if (-not $version) { throw "Version illisible dans cpm/constants.py" }
 Write-Host "Version : $version"
 
-python -m PyInstaller --noconfirm --onedir --windowed `
-  --name "Slimgma" --icon assets/slimgma.ico `
-  --add-data "assets/slimgma.ico;assets" `
-  --collect-all tkinterdnd2 --collect-all srctools slimgma.py
-if ($LASTEXITCODE -ne 0) { throw "PyInstaller a échoué" }
+if (-not $SkipBuild) {
+  python -m PyInstaller --noconfirm --onedir --windowed `
+    --name "Slimgma" --icon assets/slimgma.ico `
+    --add-data "assets/slimgma.ico;assets" `
+    --collect-all tkinterdnd2 --collect-all srctools slimgma.py
+  if ($LASTEXITCODE -ne 0) { throw "PyInstaller a échoué" }
+}
 
 if (-not (Test-Path 'dist/Slimgma/Slimgma.exe')) {
   throw "dist/Slimgma/Slimgma.exe est absent — PyInstaller n'a rien produit"
+}
+
+if ($SkipCompile) {
+  Write-Host "Compilation Inno Setup ignorée (-SkipCompile)."
+  exit 0
 }
 
 Copy-Item LICENSE packaging/LICENSE.txt -Force
