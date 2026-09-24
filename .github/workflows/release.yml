@@ -48,28 +48,83 @@ jobs:
           --collect-all tkinterdnd2 --collect-all srctools
           slimgma.py
 
-      - name: Vérifier que le portable démarre
+      - name: Vérifier que le portable démarre (avant signature)
         run: dist\Slimgma.exe --help
         shell: cmd
 
-      - name: Mettre le portable de côté
+      - name: Construire l'application pour l'installateur (sans compiler l'installateur)
+        shell: pwsh
+        run: ./.github/scripts/build-installer.ps1 -SkipCompile
+
+      - name: Préparer le lot à signer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force unsigned/app | Out-Null
+          Copy-Item dist/Slimgma.exe unsigned/Slimgma.exe
+          Copy-Item dist/Slimgma/Slimgma.exe unsigned/app/Slimgma.exe
+
+      - name: Envoyer le lot non signé
+        id: upload-unsigned-exes
+        uses: actions/upload-artifact@v4
+        with:
+          name: slimgma-unsigned
+          path: unsigned/**
+          if-no-files-found: error
+
+      - name: Signer le portable et l'application (SignPath)
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: "${{ secrets.SIGNPATH_API_TOKEN }}"
+          organization-id: "${{ vars.SIGNPATH_ORGANIZATION_ID }}"
+          project-slug: "Slimgma"
+          signing-policy-slug: "release-signing"
+          github-artifact-id: "${{ steps.upload-unsigned-exes.outputs.artifact-id }}"
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Réinjecter les binaires signés
+        shell: pwsh
+        run: |
+          Copy-Item signed/Slimgma.exe dist/Slimgma.exe -Force
+          Copy-Item signed/app/Slimgma.exe dist/Slimgma/Slimgma.exe -Force
+
+      - name: Vérifier que l'application signée démarre
+        run: dist\Slimgma\Slimgma.exe --help
+        shell: cmd
+
+      - name: Mettre le portable signé de côté
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force livraison | Out-Null
           Move-Item dist/Slimgma.exe livraison/Slimgma.exe
 
-      - name: Construire le programme d'installation
+      - name: Compiler l'installateur (avec l'application déjà signée)
         shell: pwsh
-        run: ./.github/scripts/build-installer.ps1
+        run: ./.github/scripts/build-installer.ps1 -SkipBuild
 
-      - name: Vérifier que l'application installée démarre
-        run: dist\Slimgma\Slimgma.exe --help
-        shell: cmd
+      - name: Envoyer l'installateur non signé
+        id: upload-unsigned-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: slimgma-installateur-non-signe
+          path: dist/Slimgma-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Signer l'installateur (SignPath)
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: "${{ secrets.SIGNPATH_API_TOKEN }}"
+          organization-id: "${{ vars.SIGNPATH_ORGANIZATION_ID }}"
+          project-slug: "Slimgma"
+          signing-policy-slug: "release-signing"
+          github-artifact-id: "${{ steps.upload-unsigned-setup.outputs.artifact-id }}"
+          wait-for-completion: true
+          output-artifact-directory: signed-installer
 
       - name: Rassembler la livraison
         shell: pwsh
         run: |
-          Move-Item dist/Slimgma-Setup-*.exe livraison/
+          Copy-Item signed-installer/Slimgma-Setup-*.exe livraison/ -Force
           Get-ChildItem livraison | Format-Table Name, Length
 
       - name: Rédiger les notes de version
