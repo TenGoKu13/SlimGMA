@@ -106,10 +106,21 @@ l'interface et l'IA utilisent exactement les mêmes outils.
    Entraîner un modèle *à partir de zéro* n'est pas réaliste (des millions
    d'euros de calcul) ; affiner un modèle ouvert l'est, sur un seul GPU.
 
-### Matériel
-- Avec carte graphique ≥ 6 Go de VRAM : modèle 7-8B, fluide
-- Sans : modèle plus petit sur CPU, plus lent
-- Option : brancher une IA en ligne (clé API) pour les PC trop faibles
+### Matériel : l'app s'adapte toute seule
+Au premier lancement, l'app détecte le PC (carte graphique, VRAM, RAM, CPU),
+fait un petit test de vitesse et choisit le niveau d'IA adapté :
+
+| VRAM détectée | Modèle texte | Vision | Ressenti |
+|---|---|---|---|
+| Pas de GPU / < 4 Go | 1-2B sur CPU | légère, à la demande | lent mais fonctionne |
+| 4-6 Go | ~4B sur GPU | légère | correct |
+| 8-12 Go | 7-8B sur GPU | complète | fluide |
+| 16 Go et + | 14B sur GPU | complète | le meilleur |
+
+Le niveau reste modifiable à la main dans les réglages. 100 % local : aucune
+donnée ne quitte le PC. Seule exception, le **téléchargement unique** du
+modèle choisi au premier lancement (plusieurs Go, trop lourd pour
+l'installateur).
 
 ---
 
@@ -130,12 +141,15 @@ mois sans rien qui marche.
 
 ---
 
-## 5. Questions à trancher
+## 5. Décisions
 
-1. **Nom** de l'app (on garde Slimgma ou nouveau nom ?)
-2. **Même dépôt** (SlimGMA devient la nouvelle app) ou **nouveau dépôt** ?
-3. **Blender obligatoire** : l'installateur le télécharge, ou on demande à
-   l'utilisateur de l'avoir ?
-4. **IA** : 100 % locale, ou locale + option en ligne ?
-5. **Ta config PC** (carte graphique, VRAM) pour calibrer le modèle IA
-6. Open source (MIT) comme aujourd'hui, ou fermé ?
+- **Code fermé** pour l'instant
+- **IA 100 % locale**, niveau choisi selon le matériel détecté (§3)
+- **Blender** : déjà installé chez l'utilisateur. L'app le détecte
+  (chemins par défaut, Steam, registre Windows), vérifie la version, et
+  demande le dossier seulement si elle ne le trouve pas
+
+## 6. Questions restantes
+
+1. **Nom** de l'app
+2. **Nouveau dépôt privé** pour la nouvelle app (SlimGMA est public)
